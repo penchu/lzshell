@@ -24,26 +24,24 @@ int main() {
         }    
         args[i] = NULL;
 
-        // chdir("/working");
 
-        // char *dir = "/mnt/sdb1/python projects/lzshell/working";
-        // int ret_dir = chdir(dir);
-
-        // if (args[0] == "cd") {
         if (strcmp(args[0], "cd") == 0) {
-            // int ret_dir = chdir(dir);
-            int ret_dir = chdir(args[1]);
-            if (ret_dir != 0) {
-                printf("Value of errno: %d\n", errno);
+
+            if (args[1] == NULL || strcmp(args[1], "~") == 0) {
+                chdir(getenv("HOME"));
             }
             else {
-                printf("success\n");
+                int ret_dir = chdir(args[1]);
+                if (ret_dir != 0) {
+                    printf("Value of errno: %d\n", errno);
+                }
+                else {
+                    printf("success\n");
+                }
+                // printf("%s\n", args[0]);
+                // printf("%s\n", getcwd(*args, 64));
             }
-            printf("%s\n", args[0]);
-            printf("%s\n", getcwd(*args, 64));
         }
-        // printf("%s\n", args[0]);
-        // printf("%s\n", getcwd(*args, 64));
         else {
             pid_t proc_fork = fork();
             if (proc_fork == 0) {

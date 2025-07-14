@@ -4,13 +4,16 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <stdbool.h> 
 
 int main() {
+    bool working = true;
     
-    while(1) {
+    while(working) {
         char line[1024] = {0};
         char *args[64] = {0};
         int i = 0;
+        // bool working = true;
         
         printf("lzsh> ");
         fgets(line, sizeof(line), stdin);
@@ -26,21 +29,20 @@ int main() {
 
 
         if (strcmp(args[0], "cd") == 0) {
-
             if (args[1] == NULL || strcmp(args[1], "~") == 0) {
                 chdir(getenv("HOME"));
             }
             else {
                 int ret_dir = chdir(args[1]);
                 if (ret_dir != 0) {
-                    printf("Value of errno: %d\n", errno);
+                    printf("Error: %s\n", strerror(errno));
                 }
-                else {
-                    printf("success\n");
-                }
-                // printf("%s\n", args[0]);
-                // printf("%s\n", getcwd(*args, 64));
             }
+        }
+        else if (strcmp(args[0], "exit") == 0) {
+            // exit(0);
+            working = false;
+            break;
         }
         else {
             pid_t proc_fork = fork();
@@ -58,5 +60,6 @@ int main() {
         }
         memset(args, 0, sizeof(args));
     }
+    // if (!working) exit(0);
     return 0;
 }

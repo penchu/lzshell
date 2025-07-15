@@ -13,7 +13,7 @@ int main() {
         char line[1024] = {0};
         char *args[64] = {0};
         int i = 0;
-        // bool working = true;
+        bool flag_e = false;
         
         printf("lzsh> ");
         fgets(line, sizeof(line), stdin);
@@ -27,7 +27,6 @@ int main() {
         }    
         args[i] = NULL;
 
-
         if (strcmp(args[0], "cd") == 0) {
             if (args[1] == NULL || strcmp(args[1], "~") == 0) {
                 chdir(getenv("HOME"));
@@ -40,9 +39,29 @@ int main() {
             }
         }
         else if (strcmp(args[0], "exit") == 0) {
-            // exit(0);
             working = false;
             break;
+        }
+        else if (strcmp(args[0], "echotest") == 0) {
+            int echo_count = 1;
+            if (strcmp(args[1], "-n") == 0) {
+                echo_count++;
+                args[strcspn(line, "\n")] = '\0';
+            }
+            if (strcmp(args[1], "-e") == 0) {
+                echo_count++; 
+                flag_e = true;
+            }
+            while (args[echo_count] != NULL) {
+                if (flag_e) {
+                    for (int i = 0; args[echo_count][i] != '\\'; i++) {
+                        printf("%c", args[echo_count][i]);
+                        break;
+                    }
+                }
+                printf("%s ", args[echo_count++]);
+            }
+            printf("\n");
         }
         else {
             pid_t proc_fork = fork();
@@ -60,6 +79,5 @@ int main() {
         }
         memset(args, 0, sizeof(args));
     }
-    // if (!working) exit(0);
     return 0;
 }

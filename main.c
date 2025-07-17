@@ -13,7 +13,7 @@ int main() {
         char line[1024] = {0};
         char *args[64] = {0};
         int i = 0;
-        bool flag_e = false;
+        char flag[6] = {0};
         
         printf("lzsh> ");
         fgets(line, sizeof(line), stdin);
@@ -42,26 +42,28 @@ int main() {
             working = false;
             break;
         }
-        else if (strcmp(args[0], "echotest") == 0) {
+        else if (strcmp(args[0], "ech") == 0) {
             int echo_count = 1;
             if (strcmp(args[1], "-n") == 0) {
                 echo_count++;
-                args[strcspn(line, "\n")] = '\0';
+                flag[6] = 'n';
             }
-            if (strcmp(args[1], "-e") == 0) {
-                echo_count++; 
-                flag_e = true;
-            }
-            while (args[echo_count] != NULL) {
-                if (flag_e) {
-                    for (int i = 0; args[echo_count][i] != '\\'; i++) {
-                        printf("%c", args[echo_count][i]);
-                        break;
-                    }
+            // if (strcmp(args[1], "-e") == 0) {
+            //     echo_count++; 
+            //     flag_e = true;
+            // }
+            // while (args[echo_count] != NULL) {     
+            //     printf("%s ", args[echo_count++]);
+            // }
+            for (int j = echo_count; j < i; j++) {
+                if (j == (i-1)) {
+                    printf("%s", args[j]);
                 }
-                printf("%s ", args[echo_count++]);
+                else printf("%s ", args[j]);
             }
-            printf("\n");
+            if (!(flag[6] == 'n')) {
+                printf("\n");
+            }
         }
         else {
             pid_t proc_fork = fork();

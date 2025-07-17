@@ -12,7 +12,7 @@ int main() {
     while(working) {
         char line[1024] = {0};
         char *args[64] = {0};
-        int i = 0;
+        int n = 0;
         char flag[6] = {0};
         
         printf("lzsh> ");
@@ -22,10 +22,10 @@ int main() {
         char *linePtr = strtok(line, " "); //tokenizing everything between space in the input
 
         while(linePtr != 0) {
-            args[i++] = linePtr; //adding into the array the token and every other 
+            args[n++] = linePtr; //adding into the array the token and every other 
             linePtr = strtok(NULL, " "); //continuing tokenizing after the first one where it stopped
         }    
-        args[i] = NULL;
+        args[n] = NULL;
 
         if (strcmp(args[0], "cd") == 0) {
             if (args[1] == NULL || strcmp(args[1], "~") == 0) {
@@ -48,19 +48,31 @@ int main() {
                 echo_count++;
                 flag[6] = 'n';
             }
-            // if (strcmp(args[1], "-e") == 0) {
-            //     echo_count++; 
-            //     flag_e = true;
-            // }
+            if (strcmp(args[1], "-e") == 0) {
+                echo_count++; 
+                flag[6] = 'e';
+            }
+            
+            for (int i = echo_count; i < n; i++) {
+                for (int j = 0; args[i][j] != '\0'; j++) {
+                    if (args[i][j] == '\\' && args[i][j+1] == 'n') {
+                        j++;
+                        j++;
+                        printf("\n");
+                    }
+                    printf("%c", args[i][j]);
+                }
+            }
+
             // while (args[echo_count] != NULL) {     
             //     printf("%s ", args[echo_count++]);
             // }
-            for (int j = echo_count; j < i; j++) {
-                if (j == (i-1)) {
-                    printf("%s", args[j]);
-                }
-                else printf("%s ", args[j]);
-            }
+            // for (int i = echo_count; i < n; i++) {      
+            //     if (i == (n-1) && flag[6] == 'n') {
+            //         printf("%s", args[i]);
+            //     }
+            //     else printf("%s ", args[i]);
+            // }
             if (!(flag[6] == 'n')) {
                 printf("\n");
             }

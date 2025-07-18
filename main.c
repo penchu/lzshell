@@ -60,6 +60,14 @@ int main() {
                         j++;
                         printf("\n");
                     }
+                    if (args[i][j] == '\\' && args[i][j+1] == 't') {
+                        j++;
+                        j++;
+                        printf("\t");
+                    }
+                    if (args[i][j] == '\\' && args[i][j+1] == '\\') {
+                        j++;
+                    }
                     printf("%c", args[i][j]);
                 }
             }

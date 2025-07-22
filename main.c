@@ -13,19 +13,31 @@ int main() {
         char line[1024] = {0};
         char *args[64] = {0};
         int n = 0;
+        int m = 0;
         char flag[6] = {0};
         
         printf("lzsh> ");
         fgets(line, sizeof(line), stdin);
         line[strcspn(line, "\n")] = '\0'; //removing the new line at the back
 
-        char *linePtr = strtok(line, " "); //tokenizing everything between space in the input
+        // char *linePtr = strtok(line, " "); //tokenizing everything between space in the input
+        // while(linePtr != 0) {
+        //     args[n++] = linePtr; //adding into the array the token and every other 
+        //     linePtr = strtok(NULL, " "); //continuing tokenizing after the first one where it stopped
+        // }    
+        // args[n] = NULL;
 
-        while(linePtr != 0) {
-            args[n++] = linePtr; //adding into the array the token and every other 
-            linePtr = strtok(NULL, " "); //continuing tokenizing after the first one where it stopped
-        }    
+
+        for (int i = 0; line[i] != '\0'; i++) {
+            args[n][m++] = line[i];
+            if (line[i] == ' ') {
+                n++;
+            }
+            args[n][m++] = line[i];
+            // printf("  ");
+        }
         args[n] = NULL;
+
 
         if (strcmp(args[0], "cd") == 0) {
             if (args[1] == NULL || strcmp(args[1], "~") == 0) {
@@ -70,6 +82,7 @@ int main() {
                     }
                     printf("%c", args[i][j]);
                 }
+                printf(" ");
             }
 
             // while (args[echo_count] != NULL) {     

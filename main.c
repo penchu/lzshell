@@ -8,6 +8,10 @@
 
 #define MAX_WORD_LENGTH 128
 
+int parse_input (char **args, char *line, int n, int m, bool quotes);
+int cmd_cd (char **args);
+int cmd_echo (char **args, char *flag, int n);
+
 int main() {
     bool working = true;
     
@@ -29,125 +33,85 @@ int main() {
         //     linePtr = strtok(NULL, " "); //continuing tokenizing after the first one where it stopped
         // }    
         // args[n] = NULL;
-
-        // printf("buffer = \"%s\"\n", line);
-        // for (int i = 0; line[i] != '\0'; i++) {
-        //     printf("buffer[%d] = '%c' (ASCII %d)\n", i, line[i], line[i]);
-        // }
         
         args[0] = malloc(MAX_WORD_LENGTH);
-        for (int i = 0; line[i] != '\0'; i++) {
-            if (line[i] == '"') {
-                quotes = true;
-            }
-            if (!quotes) {
-                if (line[i] == ' ') {
-                    n++;  
-                    args[n] = malloc(MAX_WORD_LENGTH);
-                    m = 0;   
-                    continue;           
-                }
-                args[n][m++] = line[i];
-            }
-            else {
-                while (line[i] != '"') {
-                    args[n][m++] = line[i++];
-                }
-                quotes = false;
-                // n++;
-                // args[n] = malloc(MAX_WORD_LENGTH);
-                m = 0;
-                continue;
-            }
-            // if (!quotes) {
-                // args[n][m++] = line[i];
-                // m++;
-            // }
-            // else {
-            //     while (line[i] != '"') {
-            //         args[n][m++] = line[i++];
-            //     }
-            //     quotes = false;
-            // }
-        }
-        // printf("%s\n", args[0]);
-        // args[n] = NULL;
-
-        // for (int i = 0; args[i] != NULL; i++) {
-        //     for (int j = 0; args[i][j] != '\0'; j++) {
-        //         printf("%c ", args[i][j]);
+        parse_input(args, line, n, m, quotes);
+        // for (int i = 0; line[i] != '\0'; i++) {
+        //     if (line[i] == '"') {
+        //         quotes = true;
         //     }
-        //     printf("\n");
+        //     if (!quotes) {
+        //         if (line[i] == ' ') {
+        //             n++;  
+        //             args[n] = malloc(MAX_WORD_LENGTH);
+        //             m = 0;   
+        //             continue;           
+        //         }
+        //         args[n][m++] = line[i];
+        //     }
+        //     else {
+        //         while (line[i] != '"') {
+        //             args[n][m++] = line[i++];
+        //         }
+        //         quotes = false;
+        //         m = 0;
+        //         continue;
+        //     }
         // }
-        // printf("\n");
-        
-        // for (int m = 0; args[n][m] != '\0'; m++) {
-        //     printf("args[%d][%d] = '%c' (ASCII %d)\n", n, m, args[n][m], args[n][m]);
-        // }
-
 
         if (strcmp(args[0], "cd") == 0) {
-            if (args[1] == NULL || strcmp(args[1], "~") == 0) {
-                chdir(getenv("HOME"));
-            }
-            else {
-                int ret_dir = chdir(args[1]);
-                if (ret_dir != 0) {
-                    printf("Error: %s\n", strerror(errno));
-                }
-            }
+            // if (args[1] == NULL || strcmp(args[1], "~") == 0) {
+            //     chdir(getenv("HOME"));
+            // }
+            // else {
+            //     int ret_dir = chdir(args[1]);
+            //     if (ret_dir != 0) {
+            //         printf("Error: %s\n", strerror(errno));
+            //     }
+            // }
+            cmd_cd(args);
         }
         else if (strcmp(args[0], "ext") == 0) {
             working = false;
             break;
         }
         else if (strcmp(args[0], "ech") == 0) {
-            int echo_count = 1;
-            if (strcmp(args[1], "-n") == 0) {
-                echo_count++;
-                flag[6] = 'n';
-            }
-            else if (strcmp(args[1], "-e") == 0) {
-                echo_count++; 
-                flag[6] = 'e';
-            }
-            
-            for (int i = echo_count; i <= n; i++) {
-                for (int j = 0; args[i][j] != '\0'; j++) {
-                    if (flag[6] == 'e') {
-                        if (args[i][j] == '\\' && args[i][j+1] == 'n') {
-                            j++;
-                            j++;
-                            printf("\n");
-                        }
-                        if (args[i][j] == '\\' && args[i][j+1] == 't') {
-                            j++;
-                            j++;
-                            printf("\t");
-                        }
-                        if (args[i][j] == '\\' && args[i][j+1] == '\\') {
-                        j++;
-                    }
-                    }
-                    printf("%c", args[i][j]);
-                }
-                if (i != n) {
-                    printf(" ");
-                }
-            }
-
-            // while (args[echo_count] != NULL) {     
-            //     printf("%s ", args[echo_count++]);
+            cmd_echo(args, flag, n);
+            // int echo_count = 1;
+            // if (strcmp(args[1], "-n") == 0) {
+            //     echo_count++;
+            //     flag[6] = 'n';
             // }
-            // for (int i = echo_count; i < n; i++) {      
-            //     if (i == (n-1) && flag[6] == 'n') {
-            //         printf("%s", args[i]);
+            // else if (strcmp(args[1], "-e") == 0) {
+            //     echo_count++; 
+            //     flag[6] = 'e';
+            // }            
+            // for (int i = echo_count; i <= n; i++) {
+            //     for (int j = 0; args[i][j] != '\0'; j++) {
+            //         if (flag[6] == 'e') {
+            //             if (args[i][j] == '\\' && args[i][j+1] == 'n') {
+            //                 j++;
+            //                 j++;
+            //                 printf("\n");
+            //             }
+            //             if (args[i][j] == '\\' && args[i][j+1] == 't') {
+            //                 j++;
+            //                 j++;
+            //                 printf("\t");
+            //             }
+            //             if (args[i][j] == '\\' && args[i][j+1] == '\\') {
+            //             j++;
+            //         }
+            //         }
+            //         printf("%c", args[i][j]);
             //     }
-            //     else printf("%s ", args[i]);
+            //     if (i != n) {
+            //         printf(" ");
+            //     }
             // }
-            if (!(flag[6] == 'n')) { //checking if there is a flag -n to not include a new line
-                printf("\n");
-            }
+            // if (!(flag[6] == 'n')) { //checking if there is a flag -n to not include a new line
+            //     printf("\n");
+            // }
         }
         else {
             pid_t proc_fork = fork();
@@ -164,6 +128,86 @@ int main() {
             }
         }
         memset(args, 0, sizeof(args));
+    }
+    return 0;
+}
+
+int parse_input (char **args, char *line, int n, int m, bool quotes) {
+    // bool quotes;
+    for (int i = 0; line[i] != '\0'; i++) {
+        if (line[i] == '"') {
+            quotes = true;
+        }
+        if (!quotes) {
+            if (line[i] == ' ') {
+                n++;  
+                args[n] = malloc(MAX_WORD_LENGTH);
+                m = 0;   
+                continue;           
+            }
+            args[n][m++] = line[i];
+        }
+        else {
+            while (line[i] != '"') {
+                args[n][m++] = line[i++];
+            }
+            quotes = false;
+            m = 0;
+            continue;
+        }
+    }
+    return 0;
+}
+
+int cmd_cd (char **args) {
+    if (args[1] == NULL || strcmp(args[1], "~") == 0) {
+        chdir(getenv("HOME"));
+    }
+    else {
+        int ret_dir = chdir(args[1]);
+        if (ret_dir != 0) {
+            printf("Error: %s\n", strerror(errno));
+        }
+    }    
+    return 0;
+}
+
+int cmd_echo (char **args, char *flag, int n) {
+    int echo_count = 1;
+    // char flag[6] = {0};
+    if (strcmp(args[1], "-n") == 0) {
+        echo_count++;
+        flag[6] = 'n';
+    }
+    else if (strcmp(args[1], "-e") == 0) {
+        echo_count++; 
+        flag[6] = 'e';
+    }    
+    for (int i = echo_count; i <= n; i++) {
+        for (int j = 0; args[i][j] != '\0'; j++) {
+            if (flag[6] == 'e') {
+                if (args[i][j] == '\\' && args[i][j+1] == 'n') {
+                    j++;
+                    j++;
+                    printf("\n");
+                }
+                if (args[i][j] == '\\' && args[i][j+1] == 't') {
+                    j++;
+                    j++;
+                    printf("\t");
+                }
+                if (args[i][j] == '\\' && args[i][j+1] == '\\') {
+                j++;
+            }
+            }
+            printf("%c", args[i][j]);
+        }
+        if (i != n) {
+            printf(" ");
+        }
+    }
+    if (!(flag[6] == 'n')) { //checking if there is a flag -n to not include a new line
+        printf("\n");
     }
     return 0;
 }

@@ -8,7 +8,7 @@
 
 #define MAX_WORD_LENGTH 128
 
-int parse_input (char **args, char *line, int n, int m, bool quotes);
+int parse_input (char **args, char *line, int *n, int m, bool quotes);
 int cmd_cd (char **args);
 int cmd_echo (char **args, char *flag, int n);
 
@@ -26,16 +26,9 @@ int main() {
         printf("lzsh> ");
         fgets(line, sizeof(line), stdin);
         line[strcspn(line, "\n")] = '\0'; //removing the new line at the back
-
-        // char *linePtr = strtok(line, " "); //tokenizing everything between space in the input
-        // while(linePtr != 0) {
-        //     args[n++] = linePtr; //adding into the array the token and every other 
-        //     linePtr = strtok(NULL, " "); //continuing tokenizing after the first one where it stopped
-        // }    
-        // args[n] = NULL;
         
         args[0] = malloc(MAX_WORD_LENGTH);
-        parse_input(args, line, n, m, quotes);
+        parse_input(args, line, &n, m, quotes);
         // for (int i = 0; line[i] != '\0'; i++) {
         //     if (line[i] == '"') {
         //         quotes = true;
@@ -132,24 +125,23 @@ int main() {
     return 0;
 }
 
-int parse_input (char **args, char *line, int n, int m, bool quotes) {
-    // bool quotes;
+int parse_input (char **args, char *line, int *n, int m, bool quotes) {
     for (int i = 0; line[i] != '\0'; i++) {
         if (line[i] == '"') {
             quotes = true;
         }
         if (!quotes) {
             if (line[i] == ' ') {
-                n++;  
-                args[n] = malloc(MAX_WORD_LENGTH);
+                (*n)++;  
+                args[*n] = malloc(MAX_WORD_LENGTH);
                 m = 0;   
                 continue;           
             }
-            args[n][m++] = line[i];
+            args[*n][m++] = line[i];
         }
         else {
             while (line[i] != '"') {
-                args[n][m++] = line[i++];
+                args[*n][m++] = line[i++];
             }
             quotes = false;
             m = 0;
@@ -174,7 +166,6 @@ int cmd_cd (char **args) {
 
 int cmd_echo (char **args, char *flag, int n) {
     int echo_count = 1;
-    // char flag[6] = {0};
     if (strcmp(args[1], "-n") == 0) {
         echo_count++;
         flag[6] = 'n';

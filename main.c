@@ -11,10 +11,12 @@
 int parse_input (char **args, char *line, int *n, int m, bool quotes);
 int cmd_cd (char **args);
 int cmd_echo (char **args, char *flag, int n);
+int run_external(char **args);
+int redirection_draft(char **args);
 
 int main() {
     bool working = true;
-    
+
     while (working) {
         char line[1024] = {0};
         char *args[MAX_WORD_LENGTH] = {0};
@@ -29,28 +31,6 @@ int main() {
         
         args[0] = malloc(MAX_WORD_LENGTH);
         parse_input(args, line, &n, m, quotes);
-        // for (int i = 0; line[i] != '\0'; i++) {
-        //     if (line[i] == '"') {
-        //         quotes = true;
-        //     }
-        //     if (!quotes) {
-        //         if (line[i] == ' ') {
-        //             n++;  
-        //             args[n] = malloc(MAX_WORD_LENGTH);
-        //             m = 0;   
-        //             continue;           
-        //         }
-        //         args[n][m++] = line[i];
-        //     }
-        //     else {
-        //         while (line[i] != '"') {
-        //             args[n][m++] = line[i++];
-        //         }
-        //         quotes = false;
-        //         m = 0;
-        //         continue;
-        //     }
-        // }
 
         if (strcmp(args[0], "cd") == 0) {
             // if (args[1] == NULL || strcmp(args[1], "~") == 0) {
@@ -107,18 +87,7 @@ int main() {
             // }
         }
         else {
-            pid_t proc_fork = fork();
-            if (proc_fork == 0) {
-                execvp(args[0], args);
-                perror("exec failed");
-                exit(1);
-            }
-            else if (proc_fork > 0) {
-                wait(NULL);
-            }
-            else {
-                perror("fork failed");
-            }
+            run_external(args);
         }
         memset(args, 0, sizeof(args));
     }
@@ -199,6 +168,34 @@ int cmd_echo (char **args, char *flag, int n) {
     }
     if (!(flag[6] == 'n')) { //checking if there is a flag -n to not include a new line
         printf("\n");
+    }
+    return 0;
+}
+
+int run_external(char **args) {
+    pid_t proc_fork = fork(); //for external commands, creating a child process 
+    redirection_draft(args); //trying to implement file redirection logic starting only with >
+    if (proc_fork == 0) {
+        execvp(args[0], args);
+        perror("exec failed");
+        exit(1);
+    }
+    else if (proc_fork > 0) {
+        wait(NULL);
+    }
+    else {
+        perror("fork failed");
+    }
+    return 0;
+}
+
+int redirection_draft(char **args) {
+    for (int i = 0; args[i] != NULL; i++) {
+        // if (strcmp(args[i], ">") && (strstr(args[i+1], ".txt")) != NULL) {
+        if (strcmp(args[i], ">")) {
+            FILE *fptr;
+            fptr = fopen(args[i+1], "w");
+        }
     }
     return 0;
 }

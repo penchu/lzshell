@@ -8,29 +8,30 @@
 
 #define MAX_WORD_LENGTH 128
 
-int parse_input (char **args, char *line, int *n, int m, bool quotes);
+int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space);
 int cmd_cd (char **args);
 int cmd_echo (char **args, char *flag, int n);
-int run_external(char **args);
-int redirection_draft(char **args);
+int run_external(char **args, int *n);
+int redirection_draft(char **args, int *n);
 
 int main() {
     bool working = true;
 
     while (working) {
-        char line[1024] = {0};
-        char *args[MAX_WORD_LENGTH] = {0};
-        int n = 0;
-        int m = 0;
-        char flag[6] = {0};
-        bool quotes;
+        char line[1024] = {0}; //user input
+        char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
+        int n = 0; //number of tokens
+        int m = 0; //for characters in each token
+        char flag[6] = {0}; //flag with the echo cmd 
+        bool quotes; //for "" detection in the input
+        bool space = false;
         
         printf("lzsh> ");
         fgets(line, sizeof(line), stdin);
         line[strcspn(line, "\n")] = '\0'; //removing the new line at the back
         
         args[0] = malloc(MAX_WORD_LENGTH);
-        parse_input(args, line, &n, m, quotes);
+        parse_input(args, line, &n, m, quotes, space);
 
         if (strcmp(args[0], "cd") == 0) {
             // if (args[1] == NULL || strcmp(args[1], "~") == 0) {
@@ -87,35 +88,60 @@ int main() {
             // }
         }
         else {
-            run_external(args);
+            run_external(args, &n);
         }
         memset(args, 0, sizeof(args));
     }
     return 0;
 }
 
-int parse_input (char **args, char *line, int *n, int m, bool quotes) {
+int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space) {
+    // bool space = false;
     for (int i = 0; line[i] != '\0'; i++) {
         if (line[i] == '"') {
             quotes = true;
+            i++;
         }
-        if (!quotes) {
-            if (line[i] == ' ') {
-                (*n)++;  
-                args[*n] = malloc(MAX_WORD_LENGTH);
-                m = 0;   
-                continue;           
-            }
-            args[*n][m++] = line[i];
-        }
-        else {
+        if (quotes) {
             while (line[i] != '"') {
                 args[*n][m++] = line[i++];
             }
             quotes = false;
             m = 0;
-            continue;
+            i++;
+            continue;      
         }
+        else {
+            if ((line[i] == ' ' || line[i] == '\t')  && (!space)) {
+                space = true;
+                (*n)++;  
+                args[*n] = malloc(MAX_WORD_LENGTH);
+                m = 0;   
+                continue;           
+            }
+            else if ((line[i] == ' ' || line[i] == '\t')  && space) {
+                continue;
+            }
+            args[*n][m++] = line[i];
+            space = false;
+        }
+        // if (!quotes) {
+        //     if (line[i] == ' ') {
+        //         (*n)++;  
+        //         args[*n] = malloc(MAX_WORD_LENGTH);
+        //         m = 0;   
+        //         continue;           
+        //     }
+        //     args[*n][m++] = line[i];
+        // }
+        // else {
+        //     while (line[i] != '"') {
+        //         args[*n][m++] = line[i++];
+        //     }
+        //     quotes = false;
+        //     m = 0;
+        //     continue;
+        // }
     }
     return 0;
 }
@@ -172,9 +198,9 @@ int cmd_echo (char **args, char *flag, int n) {
     return 0;
 }
 
-int run_external(char **args) {
+int run_external(char **args, int *n) {
     pid_t proc_fork = fork(); //for external commands, creating a child process 
-    redirection_draft(args); //trying to implement file redirection logic starting only with >
+    redirection_draft(args, n); //trying to implement file redirection logic starting only with >
     if (proc_fork == 0) {
         execvp(args[0], args);
         perror("exec failed");
@@ -189,12 +215,13 @@ int run_external(char **args) {
     return 0;
 }
 
-int redirection_draft(char **args) {
+int redirection_draft(char **args, int *n) {
     for (int i = 0; args[i] != NULL; i++) {
         // if (strcmp(args[i], ">") && (strstr(args[i+1], ".txt")) != NULL) {
-        if (strcmp(args[i], ">")) {
+        if (strcmp(args[i], ">") == 0) {
             FILE *fptr;
             fptr = fopen(args[i+1], "w");
+            (*n)++;
         }
     }
     return 0;

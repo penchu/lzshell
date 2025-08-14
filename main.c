@@ -5,13 +5,14 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <stdbool.h> 
+#include<fcntl.h>
 
 #define MAX_WORD_LENGTH 128
 
-int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space);
+int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space, bool redirection);
 int cmd_cd (char **args);
 int cmd_echo (char **args, char *flag, int n);
-int run_external(char **args, int *n);
+int run_external(char **args, int *n, bool redirection);
 int redirection_draft(char **args, int *n);
 
 int main() {
@@ -24,14 +25,16 @@ int main() {
         int m = 0; //for characters in each token
         char flag[6] = {0}; //flag with the echo cmd 
         bool quotes; //for "" detection in the input
-        bool space = false;
+        bool space; //for space and tab detection for echo cmd
+        bool redirection;
         
         printf("lzsh> ");
         fgets(line, sizeof(line), stdin);
         line[strcspn(line, "\n")] = '\0'; //removing the new line at the back
         
         args[0] = malloc(MAX_WORD_LENGTH);
-        parse_input(args, line, &n, m, quotes, space);
+        parse_input(args, line, &n, m, quotes, space, redirection);
+        args[n+1] = NULL; //it may need to be checked further what is doing
 
         if (strcmp(args[0], "cd") == 0) {
             // if (args[1] == NULL || strcmp(args[1], "~") == 0) {
@@ -88,18 +91,21 @@ int main() {
             // }
         }
         else {
-            run_external(args, &n);
+            run_external(args, &n, redirection);
         }
         memset(args, 0, sizeof(args));
     }
     return 0;
 }
 
-int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space) {
-    // bool space = false;
+int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space, bool redirection) {
     for (int i = 0; line[i] != '\0'; i++) {
         if (line[i] == '"') {
             quotes = true;
+            i++;
+        }
+        if (line[i] == '>') {
+            redirection = true;
             i++;
         }
         if (quotes) {
@@ -198,10 +204,19 @@ int cmd_echo (char **args, char *flag, int n) {
     return 0;
 }
 
-int run_external(char **args, int *n) {
+int run_external(char **args, int *n, bool redirection) {
     pid_t proc_fork = fork(); //for external commands, creating a child process 
-    redirection_draft(args, n); //trying to implement file redirection logic starting only with >
+    // if (redirection) redirection_draft(args, n);
+    // redirection_draft(args, n); //trying to implement file redirection logic starting only with >
+    
     if (proc_fork == 0) {
+        if (redirection) redirection_draft(args, n); //it's changing the output from the terminal to the file
+
+        for (int i = 0; args[i] != NULL; i++) { //checking args before running the code, the redirection works strangely
+            printf("args[%d] = %s\n", i, args[i]);
+        }
+        printf("args[%d] = %p (NULL terminator)\n", *n, args[*n]);    
+
         execvp(args[0], args);
         perror("exec failed");
         exit(1);
@@ -216,13 +231,27 @@ int run_external(char **args, int *n) {
 }
 
 int redirection_draft(char **args, int *n) {
-    for (int i = 0; args[i] != NULL; i++) {
-        // if (strcmp(args[i], ">") && (strstr(args[i+1], ".txt")) != NULL) {
-        if (strcmp(args[i], ">") == 0) {
-            FILE *fptr;
-            fptr = fopen(args[i+1], "w");
-            (*n)++;
-        }
+    for (int i = 0; args[i] != NULL; i++) { //it is searching for the text file, but probably there is a better way to do it, with keeping a point where are we when the > is localized 
+        // if (strcmp(args[i], ">") == 0) {
+        if (strstr(args[i], ".txt") != NULL) {//when it finds .txt in a token it uses it for a file to create        
+            // FILE *fptr;
+            // fptr = fopen(args[i], "w");
+            // int fd = fileno(fptr); //getting the file descriptor
+            int fd = open(args[i], O_WRONLY | O_CREAT | O_TRUNC, 0644); //it seems that it works the same as the above. chatgpt suggests as a better buffer use
+            // if (fd > 0) { 
+            //     perror("open");
+            //     exit(1);
+            // }
+            // if (dup2(fd, STDOUT_FILENO) < 0) {
+            //     perror("dup2");
+            //     close(fd);
+            //     exit(1);
+            // }
+            
+            dup2(fd, 1); //changing the stdout to the file
+            close(fd);
+            // fclose(fptr);
+        }        
     }
     return 0;
 }

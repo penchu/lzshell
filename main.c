@@ -9,16 +9,18 @@
 
 #define MAX_WORD_LENGTH 128
 
-int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space, bool *redirection, char *redirection_file);
-int cmd_cd (char **args);
-int cmd_echo (char **args, char *flag, int n);
+char *read_input();
+int parse_input(char **args, char *line, int *n, int m, bool quotes, bool space, bool *redirection, char *redirection_file);
+int cmd_cd(char **args);
+int cmd_echo(char **args, char *flag, int n);
 int run_external(char **args, int *n, bool *redirection, char *redirection_file);
 int redirection_draft(char **args, char *redirection_file);
 
 int main() {
     bool working = true;
    
-    char line[1024] = {0}; //user input
+    // char line[1024] = {0}; //user input
+    char *line = NULL;
     char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
     // args[0] = malloc(MAX_WORD_LENGTH);
     int n = 0; //number of tokens
@@ -41,8 +43,11 @@ int main() {
         // char redirection_file[MAX_WORD_LENGTH] = {0};
         
         printf("lzsh> ");
-        fgets(line, sizeof(line), stdin);
-        line[strcspn(line, "\n")] = '\0'; //removing the new line at the back
+
+        line = read_input();
+        // printf("%s\n", line);
+        // fgets(line, sizeof(line), stdin);
+        // line[strcspn(line, "\n")] = '\0'; //removing the new line at the back
         
         // args[0] = malloc(MAX_WORD_LENGTH);
         parse_input(args, line, &n, m, quotes, space, &redirection, redirection_file);
@@ -105,18 +110,35 @@ int main() {
         else {
             run_external(args, &n, &redirection, redirection_file);
         }
-        memset(args, 0, sizeof(args));
+        // memset(args, 0, sizeof(args));        
         for (int i = 0; i < n; i++) {
             free(args[i]);
+            args[i] = NULL; //optional, suggested by chatgpt
         }
+        memset(args, 0, sizeof(args));
+        free(line);
+        line = NULL; //optional, suggested by chatgpt
         n = 0;
-        // memset(redirection_file, 0, sizeof(redirection_file));
+        // memset(redirection_file, 0, sizeof(redirection_file)); 
     }
     return 0;
 }
 
+char *read_input() {
+    char *buff = calloc(1024, 1);
+    if (buff == NULL) {
+        perror("malloc");
+        exit(1);
+    }
+    
+    fgets(buff, 1024, stdin); //when using dynamic memory it sizeof() will just get the memory of the pointer and not the whole thing
+    buff[strcspn(buff, "\n")] = '\0'; //removing the new line at the back and terminating it 
+    // printf("%s\n", buff);  
+    return buff;
+}
+
 int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space, bool *redirection, char *redirection_file) {
-    args[0] = malloc(MAX_WORD_LENGTH);
+    args[0] = calloc(MAX_WORD_LENGTH, 1);
     for (int i = 0; line[i] != '\0'; i++) {
         if (line[i] == '"') {
             quotes = true;
@@ -149,7 +171,7 @@ int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space
         if ((line[i] == ' ' || line[i] == '\t')  && (!space)) {
             space = true;
             // (*n)++;  
-            if (line[i+1] != '>') args[++(*n)] = malloc(MAX_WORD_LENGTH); //not allocating memory if there is a redirection
+            if (line[i+1] != '>') args[++(*n)] = calloc(MAX_WORD_LENGTH, 1); //not allocating memory if there is a redirection, changed malloc with calloc which allocates zeroed memory and no garbage issues
             // args[*n] = malloc(MAX_WORD_LENGTH);
             m = 0;   
             continue;           
@@ -181,7 +203,7 @@ int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space
     return 0;
 }
 
-int cmd_cd (char **args) {
+int cmd_cd(char **args) {
     if (args[1] == NULL || strcmp(args[1], "~") == 0) {
         chdir(getenv("HOME"));
     }
@@ -194,7 +216,7 @@ int cmd_cd (char **args) {
     return 0;
 }
 
-int cmd_echo (char **args, char *flag, int n) {
+int cmd_echo(char **args, char *flag, int n) {
     int echo_count = 1;
     if (strcmp(args[1], "-n") == 0) {
         echo_count++;
@@ -239,7 +261,7 @@ int run_external(char **args, int *n, bool *redirection, char *redirection_file)
     // redirection_draft(args, n); //trying to implement file redirection logic starting only with >
     
     if (proc_fork == 0) {
-        // printf("%s\n", args[0]);
+        // printf("%s\n", args[0]); // the green out lines below are for checking the args array with 
         for (int i = 0; args[i] != NULL; i++) { //checking args before running the code, the redirection works strangely
             printf("args[%d] = %s\n", i, args[i]);
         }

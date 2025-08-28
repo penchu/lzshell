@@ -10,9 +10,9 @@
 #define MAX_WORD_LENGTH 128
 
 char *read_input();
-int parse_input(char **args, char *line, int *n, int m, bool quotes, bool space, bool *redirection, char *redirection_file);
+int parse_input(char **args, char *line, int *n, bool *redirection, char *redirection_file);
 int cmd_cd(char **args);
-int cmd_echo(char **args, char *flag, int n);
+int cmd_echo(char **args, int n);
 int run_external(char **args, int *n, bool *redirection, char *redirection_file);
 int redirection_draft(char **args, char *redirection_file);
 
@@ -22,25 +22,11 @@ int main() {
     // char line[1024] = {0}; //user input
     char *line = NULL;
     char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
-    // args[0] = malloc(MAX_WORD_LENGTH);
     int n = 0; //number of tokens
-    int m = 0; //for characters in each token
-    char flag[6] = {0}; //flag with the echo cmd 
-    bool quotes; //for "" detection in the input
-    bool space; //for space and tab detection for echo cmd
     bool redirection; //for if > is encountered 
     char redirection_file[MAX_WORD_LENGTH] = {0};    
 
     while (working) {
-        // char line[1024] = {0}; //user input
-        // char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
-        // int n = 0; //number of tokens
-        // int m = 0; //for characters in each token
-        // char flag[6] = {0}; //flag with the echo cmd 
-        // bool quotes; //for "" detection in the input
-        // bool space = false; //for space and tab detection for echo cmd
-        // bool redirection; //for if > is encountered 
-        // char redirection_file[MAX_WORD_LENGTH] = {0};
         
         printf("lzsh> ");
 
@@ -49,68 +35,16 @@ int main() {
         // fgets(line, sizeof(line), stdin);
         // line[strcspn(line, "\n")] = '\0'; //removing the new line at the back
         
-        // args[0] = malloc(MAX_WORD_LENGTH);
-        parse_input(args, line, &n, m, quotes, space, &redirection, redirection_file);
+        parse_input(args, line, &n, &redirection, redirection_file);
         // args[n+1] = NULL; //it may need to be checked further what is doing
 
-        if (strcmp(args[0], "cd") == 0) {
-            // if (args[1] == NULL || strcmp(args[1], "~") == 0) {
-            //     chdir(getenv("HOME"));
-            // }
-            // else {
-            //     int ret_dir = chdir(args[1]);
-            //     if (ret_dir != 0) {
-            //         printf("Error: %s\n", strerror(errno));
-            //     }
-            // }
-            cmd_cd(args);
-        }
+        if (strcmp(args[0], "cd") == 0) cmd_cd(args);
         else if (strcmp(args[0], "ext") == 0) {
             working = false;
             break;
         }
-        else if (strcmp(args[0], "ech") == 0) {
-            cmd_echo(args, flag, n);
-            // int echo_count = 1;
-            // if (strcmp(args[1], "-n") == 0) {
-            //     echo_count++;
-            //     flag[6] = 'n';
-            // }
-            // else if (strcmp(args[1], "-e") == 0) {
-            //     echo_count++; 
-            //     flag[6] = 'e';
-            // }            
-            // for (int i = echo_count; i <= n; i++) {
-            //     for (int j = 0; args[i][j] != '\0'; j++) {
-            //         if (flag[6] == 'e') {
-            //             if (args[i][j] == '\\' && args[i][j+1] == 'n') {
-            //                 j++;
-            //                 j++;
-            //                 printf("\n");
-            //             }
-            //             if (args[i][j] == '\\' && args[i][j+1] == 't') {
-            //                 j++;
-            //                 j++;
-            //                 printf("\t");
-            //             }
-            //             if (args[i][j] == '\\' && args[i][j+1] == '\\') {
-            //             j++;
-            //         }
-            //         }
-            //         printf("%c", args[i][j]);
-            //     }
-            //     if (i != n) {
-            //         printf(" ");
-            //     }
-            // }
-            // if (!(flag[6] == 'n')) { //checking if there is a flag -n to not include a new line
-            //     printf("\n");
-            // }
-        }
-        else {
-            run_external(args, &n, &redirection, redirection_file);
-        }
-        // memset(args, 0, sizeof(args));        
+        else if (strcmp(args[0], "ech") == 0) cmd_echo(args, n);
+        else run_external(args, &n, &redirection, redirection_file);
         for (int i = 0; i < n; i++) {
             free(args[i]);
             args[i] = NULL; //optional, suggested by chatgpt
@@ -137,12 +71,19 @@ char *read_input() {
     return buff;
 }
 
-int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space, bool *redirection, char *redirection_file) {
+int parse_input (char **args, char *line, int *n, bool *redirection, char *redirection_file) {
+    int m = 0; //for characters in each token
+    bool space; //for space and tab detection for echo cmd
     args[0] = calloc(MAX_WORD_LENGTH, 1);
     for (int i = 0; line[i] != '\0'; i++) {
         if (line[i] == '"') {
-            quotes = true;
             i++;
+            while (line[i] != '"') {
+                args[*n][m++] = line[i++];
+            }
+            m = 0;
+            // i++;
+            continue;   
         }
         if (line[i] == '>') {
             *redirection = true;
@@ -158,27 +99,14 @@ int parse_input (char **args, char *line, int *n, int m, bool quotes, bool space
             // args[*n] = NULL; //terminating the arraym with setting this last freed memory to NULL
             break;
         }
-        if (quotes) {
-            while (line[i] != '"') {
-                args[*n][m++] = line[i++];
-            }
-            quotes = false;
-            m = 0;
-            i++;
-            continue;      
-        }
         
         if ((line[i] == ' ' || line[i] == '\t')  && (!space)) {
             space = true;
-            // (*n)++;  
             if (line[i+1] != '>') args[++(*n)] = calloc(MAX_WORD_LENGTH, 1); //not allocating memory if there is a redirection, changed malloc with calloc which allocates zeroed memory and no garbage issues
-            // args[*n] = malloc(MAX_WORD_LENGTH);
             m = 0;   
             continue;           
         }
-        else if ((line[i] == ' ' || line[i] == '\t')  && space) {
-            continue;
-        }
+        else if ((line[i] == ' ' || line[i] == '\t')  && space) continue;
         args[*n][m++] = line[i];
         space = false;
         
@@ -216,8 +144,9 @@ int cmd_cd(char **args) {
     return 0;
 }
 
-int cmd_echo(char **args, char *flag, int n) {
+int cmd_echo(char **args, int n) {
     int echo_count = 1;
+    char flag[6] = {0}; //flag with the echo cmd
     if (strcmp(args[1], "-n") == 0) {
         echo_count++;
         flag[6] = 'n';
@@ -239,9 +168,7 @@ int cmd_echo(char **args, char *flag, int n) {
                     j++;
                     printf("\t");
                 }
-                if (args[i][j] == '\\' && args[i][j+1] == '\\') {
-                j++;
-            }
+                if (args[i][j] == '\\' && args[i][j+1] == '\\') j++;
             }
             printf("%c", args[i][j]);
         }
@@ -265,7 +192,7 @@ int run_external(char **args, int *n, bool *redirection, char *redirection_file)
         for (int i = 0; args[i] != NULL; i++) { //checking args before running the code, the redirection works strangely
             printf("args[%d] = %s\n", i, args[i]);
         }
-        printf("args[%d] = %p (NULL terminator)\n", *n, args[*n]);     
+        // printf("args[%d] = %p (NULL terminator)\n", *n, args[*n]);     
         // if (redirection) printf("success\n");
         
         if (redirection) redirection_draft(args, redirection_file); //it's changing the output from the terminal to the file 

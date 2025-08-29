@@ -7,12 +7,25 @@
 #include <stdbool.h> 
 #include<fcntl.h>
 
+struct Command {
+    const char *name;
+    const char *descr;
+};
+
+struct Command help_list[] = {
+    {"cd", "Change directory."},
+    {"ext", "Exit the shell."},
+    {"ech", "Write arguments to the standard output."},
+    {"help", "Display information about builtin commands."},    
+};
+
 #define MAX_WORD_LENGTH 128
 
 char *read_input();
 int parse_input(char **args, char *line, int *n, bool *redirection, char *redirection_file);
 int cmd_cd(char **args);
 int cmd_echo(char **args, int n);
+int cmd_help();
 int run_external(char **args, int *n, bool *redirection, char *redirection_file);
 int redirection_draft(char **args, char *redirection_file);
 
@@ -29,7 +42,6 @@ int main() {
     while (working) {
         
         printf("lzsh> ");
-
         line = read_input();
         // printf("%s\n", line);
         // fgets(line, sizeof(line), stdin);
@@ -44,6 +56,7 @@ int main() {
             break;
         }
         else if (strcmp(args[0], "ech") == 0) cmd_echo(args, n);
+        else if (strcmp(args[0], "help") == 0) cmd_help();
         else run_external(args, &n, &redirection, redirection_file);
         for (int i = 0; i < n; i++) {
             free(args[i]);
@@ -82,7 +95,6 @@ int parse_input (char **args, char *line, int *n, bool *redirection, char *redir
                 args[*n][m++] = line[i++];
             }
             m = 0;
-            // i++;
             continue;   
         }
         if (line[i] == '>') {
@@ -178,6 +190,14 @@ int cmd_echo(char **args, int n) {
     }
     if (!(flag[6] == 'n')) { //checking if there is a flag -n to not include a new line
         printf("\n");
+    }
+    return 0;
+}
+
+int cmd_help() {
+    int help_len = sizeof(help_list) / sizeof(help_list[0]);
+    for (int i = 0; i < help_len; i++) {
+        printf("%s - %s\n", help_list[i].name, help_list[i].descr);
     }
     return 0;
 }

@@ -5,7 +5,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <stdbool.h> 
-#include<fcntl.h>
+#include <fcntl.h>
 
 struct Command {
     const char *name;
@@ -22,34 +22,36 @@ struct Command help_list[] = {
 #define MAX_WORD_LENGTH 128
 
 char *read_input();
-int parse_input(char **args, char *line, int *n, int *redirection_type, bool *redirection, char *redirection_file);
+int parse_input(char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, char **piped_cmd, char *redirection_file);
 int cmd_cd(char **args);
 int cmd_echo(char **args, int n);
 int cmd_help();
-int run_external(char **args, int n, int redirection_type, bool redirection, char *redirection_file);
+int run_external(char **args, int n, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file);
 int redirection_draft(char **args, int redirection_type, char *redirection_file);
 
 int main() {
-    bool working = true;
-   
+    bool working = true;   
     // char line[1024] = {0}; //user input
     char *line = NULL;
     char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
+    char redirection_file[MAX_WORD_LENGTH] = {0};
+    char *piped_cmd[MAX_WORD_LENGTH] = {0};
     int n = 0; //number of tokens
-    bool redirection; //for if > is encountered 
-    int redirection_type;
-    char redirection_file[MAX_WORD_LENGTH] = {0};    
+    bool redirection = false; //for if > is encountered 
+    bool piping = false;
+    int redirection_type;      
 
-    while (working) {
-        
+    while (working) {        
         printf("lzsh> ");
         line = read_input();
-        // printf("%s\n", line);
-        // fgets(line, sizeof(line), stdin);
-        // line[strcspn(line, "\n")] = '\0'; //removing the new line at the back
-        
-        parse_input(args, line, &n, &redirection_type, &redirection, redirection_file);
-        // args[n+1] = NULL; //it may need to be checked further what is doing
+        // if (redirection) printf("success1\n");
+        parse_input(args, line, &n, &redirection_type, &redirection, &piping, piped_cmd, redirection_file);
+        // if (redirection) printf("success2.5\n");
+
+        // for (int i = 0; args[i] != NULL; i++) { //pirntf for checking the arrays
+        //     printf("args[%d] = %s\n", i, args[i]);
+        //     printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
+        // }
 
         if (strcmp(args[0], "cd") == 0) cmd_cd(args);
         else if (strcmp(args[0], "ext") == 0) {
@@ -58,7 +60,7 @@ int main() {
         }
         else if (strcmp(args[0], "ech") == 0) cmd_echo(args, n);
         else if (strcmp(args[0], "help") == 0) cmd_help();
-        else run_external(args, n, redirection_type, redirection, redirection_file);
+        else run_external(args, n, redirection_type, redirection, piping, piped_cmd, redirection_file);
         for (int i = 0; i < n; i++) {
             free(args[i]);
             args[i] = NULL; //optional, suggested by chatgpt
@@ -85,10 +87,11 @@ char *read_input() {
     return buff;
 }
 
-int parse_input (char **args, char *line, int *n, int *redirection_type, bool *redirection, char *redirection_file) {
+int parse_input (char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, char **piped_cmd, char *redirection_file) {
     int m = 0; //for characters in each token
     bool space; //for space and tab detection for echo cmd
     args[0] = calloc(MAX_WORD_LENGTH, 1);
+    piped_cmd[0] = calloc(MAX_WORD_LENGTH, 1);
     for (int i = 0; line[i] != '\0'; i++) {
         if (line[i] == '"') {
             i++;
@@ -110,34 +113,26 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
             redirection_file[j] = '\0';
             break;
         }
-        
+        if (line[i] == '|') {
+            *piping = true;
+            i++;
+            i++;
+            int j = 0;
+            while (line[i] != '\0') {                
+                piped_cmd[0][j++] = line[i++]; 
+            }
+            // piped_cmd[j] = '\0';
+            break;
+        }
         if ((line[i] == ' ' || line[i] == '\t')  && (!space)) {
             space = true;
-            if (line[i+1] != '>' && line[i+1] != '<') args[++(*n)] = calloc(MAX_WORD_LENGTH, 1); //not allocating memory if there is a redirection, changed malloc with calloc which allocates zeroed memory and no garbage issues
+            if (line[i+1] != '>' && line[i+1] != '<' && line[i+1] != '|') args[++(*n)] = calloc(MAX_WORD_LENGTH, 1); //not allocating memory if there is a redirection, changed malloc with calloc which allocates zeroed memory and no garbage issues
             m = 0;   
             continue;           
         }
         else if ((line[i] == ' ' || line[i] == '\t')  && space) continue;
         args[*n][m++] = line[i];
-        space = false;
-        
-        // if (!quotes) {
-        //     if (line[i] == ' ') {
-        //         (*n)++;  
-        //         args[*n] = malloc(MAX_WORD_LENGTH);
-        //         m = 0;   
-        //         continue;           
-        //     }
-        //     args[*n][m++] = line[i];
-        // }
-        // else {
-        //     while (line[i] != '"') {
-        //         args[*n][m++] = line[i++];
-        //     }
-        //     quotes = false;
-        //     m = 0;
-        //     continue;
-        // }
+        space = false;    
     }
     return 0;
 }
@@ -201,72 +196,71 @@ int cmd_help() {
     return 0;
 }
 
-int run_external(char **args, int n, int redirection_type, bool redirection, char *redirection_file) {
-    pid_t proc_fork = fork(); //for external commands, creating a child process 
-    
-    if (proc_fork == 0) {
+int run_external(char **args, int n, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file) {
+    int fd_p[2];
+    if (piping && pipe(fd_p) < 0) { //creating a pipe with the array of 2 int needed dor it and checking for an error 
+        perror("pipe");
+        exit(1);
+    }
+
+    pid_t proc_fork = fork(); //for external commands, creating a child process     
+    if (proc_fork == 0) { //return value 0 is for the child process
+        
         // printf("%s\n", args[0]); // the green out lines below are for checking the args array with 
         // for (int i = 0; args[i] != NULL; i++) { //checking args before running the code, the redirection works strangely
         //     printf("args[%d] = %s\n", i, args[i]);
         // }
-        // printf("args[%d] = %p (NULL terminator)\n", *n, args[*n]);     
-        // if (redirection) printf("success\n");
+        // printf("args[%d] = %p (NULL terminator)\n", n, args[n]);     
+        // if (redirection) printf("success3\n");
         
+        if (piping) { 
+            dup2(fd_p[1], 1);
+            close(fd_p[1]);
+            close(fd_p[0]);
+            execvp(args[0], args);
+            perror("exec failed");
+            exit(1);
+        }    
         if (redirection) redirection_draft(args, redirection_type, redirection_file); //it's changing the output from the terminal to the file 
         execvp(args[0], args);
         perror("exec failed");
         exit(1);
     }
-    else if (proc_fork > 0) {
+    else if (proc_fork > 0) { //parent process return value is 1
+        if (piping) {
+            pid_t pipe_fork = fork(); //creating another child process for the other end of the pipe
+            if (pipe_fork == 0) {
+                dup2(fd_p[0], 0);
+                close(fd_p[0]);
+                close(fd_p[1]);
+                execvp(piped_cmd[0], piped_cmd);
+            }
+            else {
+                close(fd_p[0]);
+                close(fd_p[1]);
+                wait(NULL);
+            }
+        }
         wait(NULL);
     }
     else {
         perror("fork failed");
     }
+    piped_cmd[0] = '\0';
     return 0;
 }
 
 int redirection_draft(char **args, int redirection_type, char *redirection_file) {
-    // for (int i = 0; args[i] != NULL; i++) { //it is searching for the text file, but probably there is a better way to do it, with keeping a point where are we when the > is localized 
-    //     if (strstr(args[i], ".txt") != NULL) {//when it finds .txt in a token it uses it for a file to create        
-    //         // FILE *fptr;
-    //         // fptr = fopen(args[i], "w");
-    //         // int fd = fileno(fptr); //getting the file descriptor
-    //         int fd = open(args[i], O_WRONLY | O_CREAT | O_TRUNC, 0644); //it seems that it works the same as the above. chatgpt suggests as a better buffer use
-    //         // if (fd > 0) { 
-    //         //     perror("open");
-    //         //     exit(1);
-    //         // }
-    //         // if (dup2(fd, STDOUT_FILENO) < 0) {
-    //         //     perror("dup2");
-    //         //     close(fd);
-    //         //     exit(1);
-    //         // }
-    //         dup2(fd, 1); //changing the stdout to the file
-    //         close(fd);
-    //         // fclose(fptr);
-    //     }     
-    // }
-
     // for (int i = 0; redirection_file[i] != '\0'; i++) {
     //     printf("%c", redirection_file[i]);
     // }
     // printf("\n");   
     // printf("[%c][%c][%c]\n", redirection_file[0], redirection_file[1], redirection_file[2]);   
     
-    // int fd = open(redirection_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    // if (fd < 0) {
-    //     perror("open"); 
-    //     exit(1); 
-    // }
-    // if (redirection_type == 1) dup2(fd, 1);
-    // else dup2(fd, 0);
-    // close(fd);
-
     if (redirection_type == 1) {
         int fd = open(redirection_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd < 0) {
-            perror("open"); 
+            perror("open1"); 
             exit(1); 
         }
         dup2(fd, 1);    
@@ -275,7 +269,7 @@ int redirection_draft(char **args, int redirection_type, char *redirection_file)
     else {
         int fd = open(redirection_file, O_RDONLY);
         if (fd < 0) {
-            perror("open"); 
+            perror("open2"); 
             exit(1); 
         }
         dup2(fd, 0);
@@ -285,3 +279,4 @@ int redirection_draft(char **args, int redirection_type, char *redirection_file)
     redirection_file[0] = '\0'; //should work almost as the memste, but zeroing out the first will stop the access
     return 0;
 }
+

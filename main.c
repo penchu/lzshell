@@ -7,27 +7,38 @@
 #include <stdbool.h> 
 #include <fcntl.h>
 
+typedef int (*ptr_func)(int argc, char *argv[]);
+
 struct Command {
     const char *name;
     const char *descr;
+    bool pipeable;
+    ptr_func handler;
 };
-
-struct Command help_list[] = {
-    {"cd", "Change directory."},
-    {"ext", "Exit the shell."},
-    {"ech", "Write arguments to the standard output."},
-    {"help", "Display information about builtin commands."},    
-};
+// struct Command help_list[] = {
+//     {"cd", "Change directory.", false, cmd_cd},
+//     {"ext", "Exit the shell.", false, cmd_ext},
+//     {"ech", "Write arguments to the standard output.", true, cmd_echo},
+//     {"help", "Display information about builtin commands.", true, cmd_help},    
+// };
 
 #define MAX_WORD_LENGTH 128
 
 char *read_input();
 int parse_input(char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, char **piped_cmd, char *redirection_file);
-int cmd_cd(char **args);
-int cmd_echo(char **args, int n);
+int cmd_cd(int argc, char **args);
+// int cmd_ext();
+int cmd_echo(int argc, char **args);
 int cmd_help();
-int run_external(char **args, int n, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file);
+int run_external(char **args, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file);
 int redirection_draft(char **args, int redirection_type, char *redirection_file);
+
+struct Command help_list[] = {
+    {"cd", "Change directory.", false, cmd_cd},
+    // {"ext", "Exit the shell.", false, cmd_ext},
+    {"ech", "Write arguments to the standard output.", true, cmd_echo},
+    {"help", "Display information about builtin commands.", true, cmd_help},    
+};
 
 int main() {
     bool working = true;   
@@ -44,24 +55,30 @@ int main() {
     while (working) {        
         printf("lzsh> ");
         line = read_input();
-        // if (redirection) printf("success1\n");
         parse_input(args, line, &n, &redirection_type, &redirection, &piping, piped_cmd, redirection_file);
-        // if (redirection) printf("success2.5\n");
 
         // for (int i = 0; args[i] != NULL; i++) { //pirntf for checking the arrays
         //     printf("args[%d] = %s\n", i, args[i]);
-        //     printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
+        //     // printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
         // }
 
-        if (strcmp(args[0], "cd") == 0) cmd_cd(args);
+        // int help_len = sizeof(help_list) / sizeof(help_list[0]);
+        // for (int i = 0; i < help_len; i++) {
+        //     if (strcmp(args[0], help_list[i].name) == 0) {
+                
+        //     }
+        // }
+        
+        if (strcmp(args[0], "cd") == 0) cmd_cd(1, args);
+        // else if (strcmp(args[0], "ext") == 0) cmd_ext();
         else if (strcmp(args[0], "ext") == 0) {
             working = false;
             break;
         }
-        else if (strcmp(args[0], "ech") == 0) cmd_echo(args, n);
+        else if (strcmp(args[0], "ech") == 0) cmd_echo(1, args);
         else if (strcmp(args[0], "help") == 0) cmd_help();
-        else run_external(args, n, redirection_type, redirection, piping, piped_cmd, redirection_file);
-        for (int i = 0; i < n; i++) {
+        else run_external(args, redirection_type, redirection, piping, piped_cmd, redirection_file);
+        for (int i = 0; args[i] != NULL; i++) {
             free(args[i]);
             args[i] = NULL; //optional, suggested by chatgpt
         }
@@ -137,7 +154,7 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
     return 0;
 }
 
-int cmd_cd(char **args) {
+int cmd_cd(int argc, char **args) {
     if (args[1] == NULL || strcmp(args[1], "~") == 0) {
         chdir(getenv("HOME"));
     }
@@ -150,7 +167,13 @@ int cmd_cd(char **args) {
     return 0;
 }
 
-int cmd_echo(char **args, int n) {
+// int cmd_ext() {
+//     exit(0);
+// }
+
+int cmd_echo(int argc, char **args) {
+    // int len_args = sizeof(args);
+    // printf("%d, %d\n", n, len_args);
     int echo_count = 1;
     char flag[6] = {0}; //flag with the echo cmd
     if (strcmp(args[1], "-n") == 0) {
@@ -161,7 +184,8 @@ int cmd_echo(char **args, int n) {
         echo_count++; 
         flag[6] = 'e';
     }    
-    for (int i = echo_count; i <= n; i++) {
+    // for (int i = echo_count; i <= n; i++) {
+    for (int i = echo_count; args[i] != NULL; i++) {
         for (int j = 0; args[i][j] != '\0'; j++) {
             if (flag[6] == 'e') {
                 if (args[i][j] == '\\' && args[i][j+1] == 'n') {
@@ -178,7 +202,8 @@ int cmd_echo(char **args, int n) {
             }
             printf("%c", args[i][j]);
         }
-        if (i != n) {
+        // if (i != n) {
+        if (args[i] != NULL) {
             printf(" ");
         }
     }
@@ -196,7 +221,7 @@ int cmd_help() {
     return 0;
 }
 
-int run_external(char **args, int n, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file) {
+int run_external(char **args, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file) {
     int fd_p[2];
     if (piping && pipe(fd_p) < 0) { //creating a pipe with the array of 2 int needed dor it and checking for an error 
         perror("pipe");
@@ -204,15 +229,7 @@ int run_external(char **args, int n, int redirection_type, bool redirection, boo
     }
 
     pid_t proc_fork = fork(); //for external commands, creating a child process     
-    if (proc_fork == 0) { //return value 0 is for the child process
-        
-        // printf("%s\n", args[0]); // the green out lines below are for checking the args array with 
-        // for (int i = 0; args[i] != NULL; i++) { //checking args before running the code, the redirection works strangely
-        //     printf("args[%d] = %s\n", i, args[i]);
-        // }
-        // printf("args[%d] = %p (NULL terminator)\n", n, args[n]);     
-        // if (redirection) printf("success3\n");
-        
+    if (proc_fork == 0) { //return value 0 is for the child process             
         if (piping) { 
             dup2(fd_p[1], 1);
             close(fd_p[1]);

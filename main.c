@@ -7,6 +7,8 @@
 #include <stdbool.h> 
 #include <fcntl.h>
 
+#define MAX_WORD_LENGTH 128
+
 typedef int (*ptr_func)(int argc, char *argv[]);
 
 struct Command {
@@ -15,34 +17,26 @@ struct Command {
     bool pipeable;
     ptr_func handler;
 };
-// struct Command help_list[] = {
-//     {"cd", "Change directory.", false, cmd_cd},
-//     {"ext", "Exit the shell.", false, cmd_ext},
-//     {"ech", "Write arguments to the standard output.", true, cmd_echo},
-//     {"help", "Display information about builtin commands.", true, cmd_help},    
-// };
-
-#define MAX_WORD_LENGTH 128
 
 char *read_input();
 int parse_input(char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, char **piped_cmd, char *redirection_file);
+int cmd_dispatch(char **args, int n, bool *working);
 int cmd_cd(int argc, char **args);
-// int cmd_ext();
 int cmd_echo(int argc, char **args);
 int cmd_help();
 int run_external(char **args, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file);
 int redirection_draft(char **args, int redirection_type, char *redirection_file);
+int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type);
 
 struct Command help_list[] = {
     {"cd", "Change directory.", false, cmd_cd},
-    // {"ext", "Exit the shell.", false, cmd_ext},
+    {"ext", "Exit the shell.", false, NULL},
     {"ech", "Write arguments to the standard output.", true, cmd_echo},
     {"help", "Display information about builtin commands.", true, cmd_help},    
 };
 
 int main() {
     bool working = true;   
-    // char line[1024] = {0}; //user input
     char *line = NULL;
     char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
     char redirection_file[MAX_WORD_LENGTH] = {0};
@@ -55,38 +49,23 @@ int main() {
     while (working) {        
         printf("lzsh> ");
         line = read_input();
-        parse_input(args, line, &n, &redirection_type, &redirection, &piping, piped_cmd, redirection_file);
-
-        // for (int i = 0; args[i] != NULL; i++) { //pirntf for checking the arrays
+        parse_input(args, line, &n, &redirection_type, &redirection, &piping, piped_cmd, redirection_file);        
+        // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
         //     printf("args[%d] = %s\n", i, args[i]);
         //     // printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
         // }
-
-        // int help_len = sizeof(help_list) / sizeof(help_list[0]);
-        // for (int i = 0; i < help_len; i++) {
-        //     if (strcmp(args[0], help_list[i].name) == 0) {
                 
-        //     }
+        // if (strcmp(args[0], "cd") == 0) cmd_cd(1, args);
+        // // else if (strcmp(args[0], "ext") == 0) cmd_ext();
+        // else if (strcmp(args[0], "ext") == 0) {
+        //     working = false;
+        //     break;
         // }
-        
-        if (strcmp(args[0], "cd") == 0) cmd_cd(1, args);
-        // else if (strcmp(args[0], "ext") == 0) cmd_ext();
-        else if (strcmp(args[0], "ext") == 0) {
-            working = false;
-            break;
-        }
-        else if (strcmp(args[0], "ech") == 0) cmd_echo(1, args);
-        else if (strcmp(args[0], "help") == 0) cmd_help();
-        else run_external(args, redirection_type, redirection, piping, piped_cmd, redirection_file);
-        for (int i = 0; args[i] != NULL; i++) {
-            free(args[i]);
-            args[i] = NULL; //optional, suggested by chatgpt
-        }
-        memset(args, 0, sizeof(args));
-        free(line);
-        line = NULL; //optional, suggested by chatgpt
-        n = 0;
-        // memset(redirection_file, 0, sizeof(redirection_file)); 
+        // else if (strcmp(args[0], "ech") == 0) cmd_echo(1, args);
+        // else if (strcmp(args[0], "help") == 0) cmd_help();
+        // else run_external(args, redirection_type, redirection, piping, piped_cmd, redirection_file);
+        if (!cmd_dispatch(args, n, &working)) run_external(args, redirection_type, redirection, piping, piped_cmd, redirection_file);
+        cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type);
     }
     return 0;
 }
@@ -105,6 +84,7 @@ char *read_input() {
 }
 
 int parse_input (char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, char **piped_cmd, char *redirection_file) {
+    // int n = 0; //number of tokens
     int m = 0; //for characters in each token
     bool space; //for space and tab detection for echo cmd
     args[0] = calloc(MAX_WORD_LENGTH, 1);
@@ -151,6 +131,24 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
         args[*n][m++] = line[i];
         space = false;    
     }
+    args[*n+1] = NULL;
+    return 0;
+}
+
+int cmd_dispatch(char **args, int n, bool *working) {
+    int help_len = sizeof(help_list) / sizeof(help_list[0]);
+    for (int i = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], "ext") == 0) {
+            *working = false;
+            return 1;
+        }            
+        for (int j = 0; j < help_len; j++) {
+            if (strcmp(args[i], help_list[j].name) == 0) {
+                help_list[j].handler(n, args);
+                return 1;       
+            }
+        }
+    }
     return 0;
 }
 
@@ -166,10 +164,6 @@ int cmd_cd(int argc, char **args) {
     }    
     return 0;
 }
-
-// int cmd_ext() {
-//     exit(0);
-// }
 
 int cmd_echo(int argc, char **args) {
     // int len_args = sizeof(args);
@@ -223,7 +217,8 @@ int cmd_help() {
 
 int run_external(char **args, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file) {
     int fd_p[2];
-    if (piping && pipe(fd_p) < 0) { //creating a pipe with the array of 2 int needed dor it and checking for an error 
+    if (piping) pipe(fd_p); //creating a pipe with the array of 2 int needed dor it and checking for an error
+    if (fd_p < 0) {  
         perror("pipe");
         exit(1);
     }
@@ -263,7 +258,7 @@ int run_external(char **args, int redirection_type, bool redirection, bool pipin
     else {
         perror("fork failed");
     }
-    piped_cmd[0] = '\0';
+    // piped_cmd[0] = '\0';
     return 0;
 }
 
@@ -283,7 +278,7 @@ int redirection_draft(char **args, int redirection_type, char *redirection_file)
         dup2(fd, 1);    
         close(fd);    
     }
-    else {
+    else if (redirection_type == 0) {
         int fd = open(redirection_file, O_RDONLY);
         if (fd < 0) {
             perror("open2"); 
@@ -293,7 +288,22 @@ int redirection_draft(char **args, int redirection_type, char *redirection_file)
         close(fd);
     }    
     // memset(redirection_file, 0, sizeof(redirection_file));
-    redirection_file[0] = '\0'; //should work almost as the memste, but zeroing out the first will stop the access
+    // redirection_file[0] = '\0'; //should work almost as the memset, but zeroing out the first will stop the access
     return 0;
 }
 
+int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type) {
+    for (int i = 0; args[i] != NULL; i++) {
+        free(args[i]);
+        args[i] = NULL; //optional, suggested by chatgpt
+    }
+    memset(args, 0, sizeof(args));
+    free(line);
+    line = NULL; //optional, suggested by chatgpt
+    *n = 0;
+    // memset(redirection_file, 0, sizeof(redirection_file)); 
+    redirection_file[0] = '\0';
+    *redirection_type = 2;
+    piped_cmd[0] = '\0';
+    return 0;
+}

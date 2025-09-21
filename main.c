@@ -52,7 +52,7 @@ int main() {
         line = read_input();
         parse_input(args, line, &n, &redirection_type, &redirection, &piping, piped_cmd, redirection_file);        
         // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
-        //     printf("args[%d] = %s\n", i, args[i]);
+        //     // printf("args[%d] = %s\n", i, args[i]);
         //     printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
         // }
 
@@ -77,6 +77,11 @@ char *read_input() {
 int parse_input (char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, char **piped_cmd, char *redirection_file) {
     int m = 0; //for characters in each token
     bool space; //for space and tab detection for echo cmd
+
+    int n_pipe = 0;
+    int m_pipe = 0;
+    bool space_pipe;
+
     args[0] = calloc(MAX_WORD_LENGTH, 1);
     piped_cmd[0] = calloc(MAX_WORD_LENGTH, 1);
     for (int i = 0; line[i] != '\0'; i++) {
@@ -106,8 +111,19 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
             i++;
             int j = 0;
             while (line[i] != '\0') {                
-                piped_cmd[0][j++] = line[i++]; 
+                // piped_cmd[0][j++] = line[i++]; //with this logic it stores the flag in the same cell as the command
+                if ((line[i] == ' ' || line[i] == '\t')  && (!space_pipe)) { //additional code, to be checked
+                    space_pipe = true;
+                    piped_cmd[++(n_pipe)] = calloc(MAX_WORD_LENGTH, 1);
+                    m_pipe = 0;
+                    i++;
+                    continue;
+                }
+                else if ((line[i] == ' ' || line[i] == '\t') && space_pipe) continue;
+                piped_cmd[n_pipe][m_pipe++] = line[i++];
+                space_pipe = false;
             }
+            piped_cmd[n_pipe+1] = NULL; //additional code, to be checked
             break;
         }
         if ((line[i] == ' ' || line[i] == '\t')  && (!space)) {
@@ -121,6 +137,8 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
         space = false;    
     }
     args[*n+1] = NULL;
+    n_pipe = 0; //additional code, to be checked
+    m_pipe = 0; //additional code, to be checked
     return 0;
 }
 

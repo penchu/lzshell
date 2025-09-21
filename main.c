@@ -55,16 +55,7 @@ int main() {
         //     printf("args[%d] = %s\n", i, args[i]);
         //     printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
         // }
-                
-        // if (strcmp(args[0], "cd") == 0) cmd_cd(1, args);
-        // // else if (strcmp(args[0], "ext") == 0) cmd_ext();
-        // else if (strcmp(args[0], "ext") == 0) {
-        //     working = false;
-        //     break;
-        // }
-        // else if (strcmp(args[0], "ech") == 0) cmd_echo(1, args);
-        // else if (strcmp(args[0], "help") == 0) cmd_help();
-        // else run_external(args, redirection_type, redirection, piping, piped_cmd, redirection_file);
+
         if (!cmd_dispatch(&builtin_handler, args, n, &working, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, piped_cmd, redirection_file);
         cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);
     }
@@ -80,12 +71,10 @@ char *read_input() {
     
     fgets(buff, 1024, stdin); //when using dynamic memory it sizeof() will just get the memory of the pointer and not the whole thing
     buff[strcspn(buff, "\n")] = '\0'; //removing the new line at the back and terminating it 
-    // printf("%s\n", buff);  
     return buff;
 }
 
 int parse_input (char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, char **piped_cmd, char *redirection_file) {
-    // int n = 0; //number of tokens
     int m = 0; //for characters in each token
     bool space; //for space and tab detection for echo cmd
     args[0] = calloc(MAX_WORD_LENGTH, 1);
@@ -119,7 +108,6 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
             while (line[i] != '\0') {                
                 piped_cmd[0][j++] = line[i++]; 
             }
-            // piped_cmd[j] = '\0';
             break;
         }
         if ((line[i] == ' ' || line[i] == '\t')  && (!space)) {
@@ -171,8 +159,6 @@ int cmd_cd(int argc, char **args) {
 }
 
 int cmd_echo(int argc, char **args) {
-    // int len_args = sizeof(args);
-    // printf("%d, %d\n", n, len_args);
     int echo_count = 1;
     char flag[6] = {0}; //flag with the echo cmd
     if (strcmp(args[1], "-n") == 0) {
@@ -231,30 +217,19 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
     pid_t proc_fork = fork();//for external commands, creating a child process     
     if (proc_fork == 0) { //return value 0 is for the child process             
         if (piping) { 
-            // close(fd_p[0]);
             dup2(fd_p[1], 1);
-            // close(fd_p[1]);
             close(fd_p[0]);
             if (builtin_handler) {  
                 builtin_handler(n, args); //trying to implement calling the function if the command is builtin, maybe should be done somewhere else
                 close(fd_p[1]);
-                // fflush(stdout);
                 _exit(0);
             }
             else {
                 execvp(args[0], args);
                 perror("exec failed1");
                 exit(1);
-                // close(fd_p[1]);
             }
-            // close(fd_p[0]);
-            // close(fd_p[1]);
         }
-        // printf("pipin3\n");
-        // if (redirection) redirection_draft(args, redirection_type, redirection_file); //it's changing the output from the terminal to the file 
-        // execvp(args[0], args);
-        // perror("exec failed2");
-        // exit(1);  
         else {  
             if (redirection) redirection_draft(args, redirection_type, redirection_file); //it's changing the output from the terminal to the file 
             execvp(args[0], args);
@@ -264,7 +239,6 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
     }
     else if (proc_fork > 0) { //parent process return value is 1
         if (piping) {
-            // close(fd_p[1]);
             pid_t pipe_fork = fork(); //creating another child process for the other end of the pipe
             if (pipe_fork == 0) {
                 close(fd_p[1]);
@@ -277,7 +251,6 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
             else if (pipe_fork > 0) {
                 close(fd_p[1]);
                 close(fd_p[0]);
-                // wait(NULL);
                 waitpid(proc_fork, NULL, 0);
                 waitpid(pipe_fork, NULL, 0);
             }

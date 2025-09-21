@@ -159,20 +159,19 @@ int cmd_cd(int argc, char **args) {
 }
 
 int cmd_echo(int argc, char **args) {
-    int echo_count = 1;
+    int echo_count = 1; //for tracking where the command stops and the text starts
     char flag[6] = {0}; //flag with the echo cmd
     if (strcmp(args[1], "-n") == 0) {
         echo_count++;
-        flag[6] = 'n';
+        flag[0] = 'n';
     }
     else if (strcmp(args[1], "-e") == 0) {
         echo_count++; 
-        flag[6] = 'e';
-    }    
-    // for (int i = echo_count; i <= n; i++) {
+        flag[0] = 'e';
+    } 
     for (int i = echo_count; args[i] != NULL; i++) {
         for (int j = 0; args[i][j] != '\0'; j++) {
-            if (flag[6] == 'e') {
+            if (flag[0] == 'e') {
                 if (args[i][j] == '\\' && args[i][j+1] == 'n') {
                     j++;
                     j++;
@@ -187,11 +186,11 @@ int cmd_echo(int argc, char **args) {
             }
             printf("%c", args[i][j]);
         }
-        if (args[i] != NULL) {
+        if (args[i+1] != NULL) {
             printf(" ");
         }
     }
-    if (!(flag[6] == 'n')) { //checking if there is a flag -n no new line
+    if (!(flag[0] == 'n')) { //checking if there is a flag -n no new line
         printf("\n");
     }
     return 0;

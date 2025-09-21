@@ -187,12 +187,11 @@ int cmd_echo(int argc, char **args) {
             }
             printf("%c", args[i][j]);
         }
-        // if (i != n) {
         if (args[i] != NULL) {
             printf(" ");
         }
     }
-    if (!(flag[6] == 'n')) { //checking if there is a flag -n to not include a new line
+    if (!(flag[6] == 'n')) { //checking if there is a flag -n no new line
         printf("\n");
     }
     return 0;

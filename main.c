@@ -11,6 +11,8 @@
 
 typedef int (*ptr_func)(int argc, char *argv[]);
 
+static volatile bool working = true;
+
 struct Command {
     const char *name;
     const char *descr;
@@ -20,23 +22,24 @@ struct Command {
 
 char *read_input();
 int parse_input(char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, char **piped_cmd, char *redirection_file);
-int cmd_dispatch(int (**builtin_handler)(int argc, char *argv[]), char **args, int n, bool *working, bool piping);
+int cmd_dispatch(int (**builtin_handler)(int argc, char *argv[]), char **args, int n, bool piping);
 int cmd_cd(int argc, char **args);
 int cmd_echo(int argc, char **args);
 int cmd_help();
+int cmd_exit();
 int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file);
 int redirection_draft(char **args, int redirection_type, char *redirection_file);
 int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping);
 
 struct Command help_list[] = {
     {"cd", "Change directory.", false, cmd_cd},
-    {"ext", "Exit the shell.", false, NULL},
+    {"ext", "Exit the shell.", false, cmd_exit},
     {"ech", "Write arguments to the standard output.", true, cmd_echo},
     {"help", "Display information about builtin commands.", true, cmd_help},    
 };
 
 int main() {
-    bool working = true;   
+    // bool working = true;   
     char *line = NULL;
     char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
     char redirection_file[MAX_WORD_LENGTH] = {0};
@@ -50,13 +53,17 @@ int main() {
     while (working) {        
         printf("lzsh> ");
         line = read_input();
+        if (!line) {
+            printf("\n");
+            return 0;
+        }
         parse_input(args, line, &n, &redirection_type, &redirection, &piping, piped_cmd, redirection_file);        
         // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
         //     // printf("args[%d] = %s\n", i, args[i]);
         //     printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
         // }
 
-        if (!cmd_dispatch(&builtin_handler, args, n, &working, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, piped_cmd, redirection_file);
+        if (!cmd_dispatch(&builtin_handler, args, n, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, piped_cmd, redirection_file);
         cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);
     }
     return 0;
@@ -69,7 +76,12 @@ char *read_input() {
         exit(1);
     }
     
-    fgets(buff, 1024, stdin); //when using dynamic memory it sizeof() will just get the memory of the pointer and not the whole thing
+    if (fgets(buff, 1024, stdin) == NULL) {
+        // free(buff);
+        // printf("\n");
+        cmd_exit();
+        return NULL;
+    } //when using dynamic memory it sizeof() will just get the memory of the pointer and not the whole thing
     buff[strcspn(buff, "\n")] = '\0'; //removing the new line at the back and terminating it 
     return buff;
 }
@@ -110,9 +122,8 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
             i++;
             i++;
             int j = 0;
-            while (line[i] != '\0') {                
-                // piped_cmd[0][j++] = line[i++]; //with this logic it stores the flag in the same cell as the command
-                if ((line[i] == ' ' || line[i] == '\t')  && (!space_pipe)) { //additional code, to be checked
+            while (line[i] != '\0') {  
+                if ((line[i] == ' ' || line[i] == '\t') && (!space_pipe)) { 
                     space_pipe = true;
                     piped_cmd[++(n_pipe)] = calloc(MAX_WORD_LENGTH, 1);
                     m_pipe = 0;
@@ -123,7 +134,7 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
                 piped_cmd[n_pipe][m_pipe++] = line[i++];
                 space_pipe = false;
             }
-            piped_cmd[n_pipe+1] = NULL; //additional code, to be checked
+            // piped_cmd[n_pipe+1] = NULL; //additional code, to be checked
             break;
         }
         if ((line[i] == ' ' || line[i] == '\t')  && (!space)) {
@@ -137,18 +148,36 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
         space = false;    
     }
     args[*n+1] = NULL;
-    n_pipe = 0; //additional code, to be checked
-    m_pipe = 0; //additional code, to be checked
+    n_pipe = 0; 
+    m_pipe = 0; 
     return 0;
 }
 
-int cmd_dispatch(int (**builtin_handler)(int argc, char *argv[]), char **args, int n, bool *working, bool piping) {
+int cmd_dispatch(int (**builtin_handler)(int argc, char *argv[]), char **args, int n, bool piping) {
+
+    // char *buffer = NULL;
+    // size_t bufsize = 32;
+    // size_t characters;
+    // buffer = (char *)malloc(bufsize * sizeof(char));
+    // // buffer = calloc(sizeof(char), bufsize);
+    // if( buffer == NULL) {
+    //     perror("Unable to allocate buffer");
+    //     exit(1);
+    // }
+    // // characters = getline(&buffer,&bufsize,stdin);
+    // // if (characters == -1) {
+    // if ((getline(&buffer,&bufsize,stdin)) == -1) {
+    //     printf("\n");
+    //     *working = false;
+    //     return 1;
+    // }
+
     int help_len = sizeof(help_list) / sizeof(help_list[0]);
     for (int i = 0; args[i] != NULL; i++) {
-        if (strcmp(args[i], "ext") == 0) {
-            *working = false;
-            return 1;
-        }            
+        // if (strcmp(args[i], "ext") == 0) {
+        //     working = false;
+        //     return 1;
+        // }            
         for (int j = 0; j < help_len; j++) {
             if (strcmp(args[i], help_list[j].name) == 0) {
                 if (help_list[j].pipeable && piping) {
@@ -318,11 +347,23 @@ int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, i
     memset(args, 0, sizeof(args));
     free(line);
     line = NULL; //optional, suggested by chatgpt
+    
+    for (int i = 0; piped_cmd[i] != NULL; i++) {
+        free(piped_cmd[i]);
+        piped_cmd[i] = NULL;
+    }
+    memset(piped_cmd, 0, sizeof(piped_cmd));
+
     *n = 0;
     // memset(redirection_file, 0, sizeof(redirection_file)); 
     redirection_file[0] = '\0';
     *redirection_type = 2;
-    piped_cmd[0] = '\0';
+    // piped_cmd[0] = '\0';
     *piping = false;
+    return 0;
+}
+
+int cmd_exit() {
+    working = false;
     return 0;
 }

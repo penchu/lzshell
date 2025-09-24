@@ -21,14 +21,14 @@ struct Command {
 };
 
 char *read_input();
-int parse_input(char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, char **piped_cmd, char *redirection_file);
+int parse_input(char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, bool *background, char **piped_cmd, char *redirection_file);
 int cmd_dispatch(int (**builtin_handler)(int argc, char *argv[]), char **args, int n, bool piping);
 int cmd_cd(int argc, char **args);
 int cmd_echo(int argc, char **args);
 int cmd_help(); 
 int cmd_exit();
 int cmd_path();
-int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file);
+int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool background, char **piped_cmd, char *redirection_file);
 int redirection_draft(char **args, int redirection_type, char *redirection_file);
 int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping);
 
@@ -49,6 +49,7 @@ int main() {
     int n = 0; //number of tokens
     bool redirection = false; //for if > is encountered 
     bool piping = false;
+    bool background = false;
     int redirection_type;  
     int (*builtin_handler)(int argc, char *argv[]) = NULL;    
 
@@ -59,13 +60,13 @@ int main() {
             printf("\n");
             return 0;
         }
-        parse_input(args, line, &n, &redirection_type, &redirection, &piping, piped_cmd, redirection_file);        
+        parse_input(args, line, &n, &redirection_type, &redirection, &piping, &background, piped_cmd, redirection_file);        
         // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
         //     // printf("args[%d] = %s\n", i, args[i]);
         //     printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
         // }
 
-        if (!cmd_dispatch(&builtin_handler, args, n, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, piped_cmd, redirection_file);
+        if (!cmd_dispatch(&builtin_handler, args, n, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, background, piped_cmd, redirection_file);
         cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);
     }
     return 0;
@@ -86,7 +87,7 @@ char *read_input() {
     return buff;
 }
 
-int parse_input (char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, char **piped_cmd, char *redirection_file) {
+int parse_input (char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, bool *background, char **piped_cmd, char *redirection_file) {
     int m = 0; //for characters in each token
     bool space; //for space and tab detection for echo cmd
 
@@ -147,30 +148,19 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
         args[*n][m++] = line[i];
         space = false;    
     }
-    args[*n+1] = NULL;
+    
+    if (strcmp(args[*n], "&") == 0) {//checking for a & for running a background process, set the flag and replace with a NULL
+        *background = true;
+        args[*n] = NULL;
+    }
+    else args[*n+1] = NULL;
+
     n_pipe = 0; 
     m_pipe = 0; 
     return 0;
 }
 
 int cmd_dispatch(int (**builtin_handler)(int argc, char *argv[]), char **args, int n, bool piping) {
-
-    // char *buffer = NULL;
-    // size_t bufsize = 32;
-    // size_t characters;
-    // buffer = (char *)malloc(bufsize * sizeof(char));
-    // // buffer = calloc(sizeof(char), bufsize);
-    // if( buffer == NULL) {
-    //     perror("Unable to allocate buffer");
-    //     exit(1);
-    // }
-    // // characters = getline(&buffer,&bufsize,stdin);
-    // // if (characters == -1) {
-    // if ((getline(&buffer,&bufsize,stdin)) == -1) {
-    //     printf("\n");
-    //     *working = false;
-    //     return 1;
-    // }
 
     int help_len = sizeof(help_list) / sizeof(help_list[0]);
     for (int i = 0; args[i] != NULL; i++) {
@@ -251,7 +241,7 @@ int cmd_help() {
     return 0;
 }
 
-int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file) {
+int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool background, char **piped_cmd, char *redirection_file) {
     int fd_p[2];
     if (piping) pipe(fd_p); //creating a pipe with the array of 2 int needed dor it and checking for an error
     if (fd_p < 0) {  

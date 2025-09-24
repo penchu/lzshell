@@ -25,8 +25,9 @@ int parse_input(char **args, char *line, int *n, int *redirection_type, bool *re
 int cmd_dispatch(int (**builtin_handler)(int argc, char *argv[]), char **args, int n, bool piping);
 int cmd_cd(int argc, char **args);
 int cmd_echo(int argc, char **args);
-int cmd_help();
+int cmd_help(); 
 int cmd_exit();
+int cmd_path();
 int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, char **piped_cmd, char *redirection_file);
 int redirection_draft(char **args, int redirection_type, char *redirection_file);
 int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping);
@@ -34,6 +35,7 @@ int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, i
 struct Command help_list[] = {
     {"cd", "Change directory.", false, cmd_cd},
     {"ext", "Exit the shell.", false, cmd_exit},
+    {"wd", "Print working directory.", true, cmd_path},
     {"ech", "Write arguments to the standard output.", true, cmd_echo},
     {"help", "Display information about builtin commands.", true, cmd_help},    
 };
@@ -77,8 +79,6 @@ char *read_input() {
     }
     
     if (fgets(buff, 1024, stdin) == NULL) {
-        // free(buff);
-        // printf("\n");
         cmd_exit();
         return NULL;
     } //when using dynamic memory it sizeof() will just get the memory of the pointer and not the whole thing
@@ -360,6 +360,19 @@ int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, i
     *redirection_type = 2;
     // piped_cmd[0] = '\0';
     *piping = false;
+    return 0;
+}
+
+int cmd_path() {
+    char *ptr = getcwd(NULL, 0);
+    if (ptr) {
+        printf("%s\n", ptr);
+        free(ptr);
+    }
+    else {
+        perror("getcwd");
+        exit(1);
+    }
     return 0;
 }
 

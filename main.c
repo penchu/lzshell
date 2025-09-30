@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <stdbool.h> 
 #include <fcntl.h>
+#include <signal.h>
 
 #define MAX_WORD_LENGTH 128
 
@@ -31,6 +32,7 @@ int cmd_path();
 int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool background, char **piped_cmd, char *redirection_file);
 int redirection_draft(char **args, int redirection_type, char *redirection_file);
 int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping);
+void sig_handler(int signum);
 
 struct Command help_list[] = {
     {"cd", "Change directory.", false, cmd_cd},
@@ -51,22 +53,47 @@ int main() {
     bool piping = false;
     bool background = false;
     int redirection_type;  
-    int (*builtin_handler)(int argc, char *argv[]) = NULL;    
+    int (*builtin_handler)(int argc, char *argv[]) = NULL;   
 
-    while (working) {        
+    struct sigaction sig;
+    sig.sa_handler = sig_handler;
+    sig.sa_flags = 0;
+    sigemptyset(&sig.sa_mask);
+
+    sigaction(SIGCHLD, &sig, NULL);
+
+    while (working) {       
         printf("lzsh> ");
         line = read_input();
         if (!line) {
-            printf("\n");
-            return 0;
+            if (errno == 4) {
+                errno = 0;
+                printf("check\n");
+                // cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);
+                // printf("lzsh> ");
+                // line = read_input();
+            }
+            else {
+                // printf("\n");
+                // return 0;
+                printf("check2\n");
+                working = false;
+            }
         }
-        parse_input(args, line, &n, &redirection_type, &redirection, &piping, &background, piped_cmd, redirection_file);        
+        else {
+            parse_input(args, line, &n, &redirection_type, &redirection, &piping, &background, piped_cmd, redirection_file);
+            if (!cmd_dispatch(&builtin_handler, args, n, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, background, piped_cmd, redirection_file);
+            // cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);
+        }
+        // parse_input(args, line, &n, &redirection_type, &redirection, &piping, &background, piped_cmd, redirection_file);        
+        
         // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
         //     // printf("args[%d] = %s\n", i, args[i]);
         //     printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
         // }
 
-        if (!cmd_dispatch(&builtin_handler, args, n, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, background, piped_cmd, redirection_file);
+        // if (!cmd_dispatch(&builtin_handler, args, n, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, background, piped_cmd, redirection_file);
+        
         cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);
     }
     return 0;
@@ -248,10 +275,11 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
         perror("pipe");
         exit(1);
     }
-
-    pid_t proc_fork = fork();//for external commands, creating a child process     
-    if (proc_fork == 0) { //return value 0 is for the child process             
+    
+    pid_t proc_fork = fork();//for external commands, creating a child process  
+    if (proc_fork == 0) { //return value 0 is for the child process   
         if (piping) { 
+            printf("child_pipe\n");
             dup2(fd_p[1], 1);
             close(fd_p[0]);
             if (builtin_handler) {  
@@ -265,7 +293,7 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
                 exit(1);
             }
         }
-        else {  
+        else { 
             if (redirection) redirection_draft(args, redirection_type, redirection_file); //it's changing the output from the terminal to the file 
             execvp(args[0], args);
             perror("exec failed2");
@@ -290,7 +318,14 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
                 waitpid(pipe_fork, NULL, 0);
             }
         }
-        else wait(NULL);
+        else if (background) { 
+            // waitpid(proc_fork, &status, WNOHANG);
+            printf("Child %d is running in background!\n", proc_fork);
+            // sigaction(SIGCHLD, sig_handler(proc_fork));//working on catching SIGCHLD which means that the child is terminated and calling the handler function to clean the queue
+        }
+        else {
+            wait(NULL);
+        }
     }
     else {
         perror("fork failed");
@@ -369,4 +404,11 @@ int cmd_path() {
 int cmd_exit() {
     working = false;
     return 0;
+}
+
+void sig_handler(int signum) {
+    int status;
+    // printf("handler\n");
+    waitpid(-1, &status, WNOHANG);
+    printf("Child finished!\n");
 }

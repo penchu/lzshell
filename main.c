@@ -62,21 +62,14 @@ int main() {
 
     sigaction(SIGCHLD, &sig, NULL);
 
-    while (working) {       
+    while (working) { 
         printf("lzsh> ");
         line = read_input();
         if (!line) {
             if (errno == 4) {
                 errno = 0;
-                printf("check\n");
-                // cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);
-                // printf("lzsh> ");
-                // line = read_input();
             }
             else {
-                // printf("\n");
-                // return 0;
-                printf("check2\n");
                 working = false;
             }
         }
@@ -93,8 +86,7 @@ int main() {
         // }
 
         // if (!cmd_dispatch(&builtin_handler, args, n, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, background, piped_cmd, redirection_file);
-        
-        cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);
+        cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);        
     }
     return 0;
 }
@@ -106,7 +98,7 @@ char *read_input() {
         exit(1);
     }
     
-    if (fgets(buff, 1024, stdin) == NULL) {
+    if (fgets(buff, 1024, stdin) == NULL && errno != 4) {
         cmd_exit();
         return NULL;
     } //when using dynamic memory it sizeof() will just get the memory of the pointer and not the whole thing
@@ -188,7 +180,6 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
 }
 
 int cmd_dispatch(int (**builtin_handler)(int argc, char *argv[]), char **args, int n, bool piping) {
-
     int help_len = sizeof(help_list) / sizeof(help_list[0]);
     for (int i = 0; args[i] != NULL; i++) {
         // if (strcmp(args[i], "ext") == 0) {
@@ -318,11 +309,14 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
                 waitpid(pipe_fork, NULL, 0);
             }
         }
-        else if (background) { 
-            // waitpid(proc_fork, &status, WNOHANG);
-            printf("Child %d is running in background!\n", proc_fork);
-            // sigaction(SIGCHLD, sig_handler(proc_fork));//working on catching SIGCHLD which means that the child is terminated and calling the handler function to clean the queue
-        }
+        // else if (background) { 
+        //     // waitpid(proc_fork, &status, WNOHANG);
+        //     printf("Child %d is running in background!\n", proc_fork);
+        //     // char *msg = "[1] %d\n", proc_fork;
+        //     // char *msg = "Child %d is running in background!\n";
+        //     // write(1, msg, strlen(msg));       
+        //     fflush(stdout);
+        // }
         else {
             wait(NULL);
         }
@@ -330,7 +324,7 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
     else {
         perror("fork failed");
     }
-    // piped_cmd[0] = '\0';
+    if (background) printf("[1] %d\n", proc_fork);
     return 0;
 }
 
@@ -408,7 +402,6 @@ int cmd_exit() {
 
 void sig_handler(int signum) {
     int status;
-    // printf("handler\n");
     waitpid(-1, &status, WNOHANG);
-    printf("Child finished!\n");
+    printf("Child finished!\n");   
 }

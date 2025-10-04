@@ -14,6 +14,9 @@ typedef int (*ptr_func)(int argc, char *argv[]);
 
 static volatile bool working = true;
 
+int test = 0;
+int test2 = 1;
+
 struct Command {
     const char *name;
     const char *descr;
@@ -64,6 +67,7 @@ int main() {
     sigaction(SIGCHLD, &sig, NULL);
 
     while (working) { 
+        if (test == test2) printf("[1] Done.\n");
         printf("lzsh> ");
         line = read_input();
         if (!line) {
@@ -287,7 +291,10 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
         }
     }
     else if (proc_fork > 0) { //parent process return value is 1
-        if (*background) printf("[1] %d\n", proc_fork);
+        if (*background) {
+            printf("[1] %d\n", proc_fork);
+            test = proc_fork;
+        }
         *background = false;
         if (piping) {
             pid_t pipe_fork = fork(); //creating another child process for the other end of the pipe
@@ -327,6 +334,7 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
     else {
         perror("fork failed");
     }
+    // if (test == proc_fork) printf("[1] Done.\n");
     return 0;
 }
 
@@ -406,8 +414,9 @@ void sig_handler(int signum, siginfo_t *info, void *context) {
     int status;
     // waitpid(-1, &status, WNOHANG); 
 
-    info->si_pid;
+    // test = info->si_pid;
     waitpid(info->si_pid, &status, WNOHANG);
+    test2 = info->si_pid;
 
-    printf("[1] Done.\n");
+    // printf("[1] Done.\n");
 }

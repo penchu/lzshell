@@ -9,6 +9,7 @@
 #include <signal.h>
 
 #define MAX_WORD_LENGTH 128
+#define MAX_JOBS 10
 
 typedef int (*ptr_func)(int argc, char *argv[]);
 
@@ -22,6 +23,13 @@ struct Command {
     const char *descr;
     bool pipeable;
     ptr_func handler;
+};
+
+struct Job_table {
+    int job_num;
+    pid_t pid;
+    char *command;
+    int status;
 };
 
 char *read_input();
@@ -44,6 +52,8 @@ struct Command help_list[] = {
     {"ech", "Write arguments to the standard output.", true, cmd_echo},
     {"help", "Display information about builtin commands.", true, cmd_help},    
 };
+
+struct Job_table jobs_list[MAX_JOBS];
 
 int main() {
     // bool working = true;   
@@ -291,11 +301,15 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
         }
     }
     else if (proc_fork > 0) { //parent process return value is 1
-        if (*background) {
+        int count = 0;
+        if (*background) {            
             printf("[1] %d\n", proc_fork);
             test = proc_fork;
-        }
-        *background = false;
+            *background = false;
+            jobs_list[count].pid = proc_fork;
+            jobs_list[count].status = 1;
+        }        
+        
         if (piping) {
             pid_t pipe_fork = fork(); //creating another child process for the other end of the pipe
             if (pipe_fork == 0) {

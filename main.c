@@ -29,10 +29,10 @@ int cmd_echo(int argc, char **args);
 int cmd_help(); 
 int cmd_exit();
 int cmd_path();
-int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool background, char **piped_cmd, char *redirection_file);
+int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool *background, char **piped_cmd, char *redirection_file);
 int redirection_draft(char **args, int redirection_type, char *redirection_file);
 int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping);
-void sig_handler(int signum);
+void sig_handler(int signum, siginfo_t *info, void *context);
 
 struct Command help_list[] = {
     {"cd", "Change directory.", false, cmd_cd},
@@ -53,11 +53,12 @@ int main() {
     bool piping = false;
     bool background = false;
     int redirection_type;  
-    int (*builtin_handler)(int argc, char *argv[]) = NULL;   
+    int (*builtin_handler)(int argc, char *argv[]) = NULL; 
 
     struct sigaction sig;
-    sig.sa_handler = sig_handler;
-    sig.sa_flags = 0;
+    // sig.sa_handler = sig_handler;
+    sig.sa_sigaction = sig_handler;
+    sig.sa_flags = SA_SIGINFO;
     sigemptyset(&sig.sa_mask);
 
     sigaction(SIGCHLD, &sig, NULL);
@@ -75,17 +76,12 @@ int main() {
         }
         else {
             parse_input(args, line, &n, &redirection_type, &redirection, &piping, &background, piped_cmd, redirection_file);
-            if (!cmd_dispatch(&builtin_handler, args, n, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, background, piped_cmd, redirection_file);
-            // cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);
+            if (!cmd_dispatch(&builtin_handler, args, n, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, &background, piped_cmd, redirection_file);
         }
-        // parse_input(args, line, &n, &redirection_type, &redirection, &piping, &background, piped_cmd, redirection_file);        
-        
         // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
         //     // printf("args[%d] = %s\n", i, args[i]);
         //     printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
         // }
-
-        // if (!cmd_dispatch(&builtin_handler, args, n, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, background, piped_cmd, redirection_file);
         cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);        
     }
     return 0;
@@ -101,7 +97,7 @@ char *read_input() {
     if (fgets(buff, 1024, stdin) == NULL && errno != 4) {
         cmd_exit();
         return NULL;
-    } //when using dynamic memory it sizeof() will just get the memory of the pointer and not the whole thing
+    } 
     buff[strcspn(buff, "\n")] = '\0'; //removing the new line at the back and terminating it 
     return buff;
 }
@@ -259,7 +255,7 @@ int cmd_help() {
     return 0;
 }
 
-int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool background, char **piped_cmd, char *redirection_file) {
+int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool *background, char **piped_cmd, char *redirection_file) {
     int fd_p[2];
     if (piping) pipe(fd_p); //creating a pipe with the array of 2 int needed dor it and checking for an error
     if (fd_p < 0) {  
@@ -268,9 +264,8 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
     }
     
     pid_t proc_fork = fork();//for external commands, creating a child process  
-    if (proc_fork == 0) { //return value 0 is for the child process   
+    if (proc_fork == 0) { //return value 0 is for the child process  
         if (piping) { 
-            printf("child_pipe\n");
             dup2(fd_p[1], 1);
             close(fd_p[0]);
             if (builtin_handler) {  
@@ -292,6 +287,8 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
         }
     }
     else if (proc_fork > 0) { //parent process return value is 1
+        if (*background) printf("[1] %d\n", proc_fork);
+        *background = false;
         if (piping) {
             pid_t pipe_fork = fork(); //creating another child process for the other end of the pipe
             if (pipe_fork == 0) {
@@ -309,6 +306,12 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
                 waitpid(pipe_fork, NULL, 0);
             }
         }
+        // else if (background) {
+        //     // fprintf(stderr, "\nChild %d is running in background!\n", proc_fork);
+        //     // fflush(stderr);
+        //     // char buffer[] = "\nChild %d is running in background!\n", proc_fork;
+        //     // strcpy(queue, buffer);
+        // }
         // else if (background) { 
         //     // waitpid(proc_fork, &status, WNOHANG);
         //     printf("Child %d is running in background!\n", proc_fork);
@@ -324,7 +327,6 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
     else {
         perror("fork failed");
     }
-    if (background) printf("[1] %d\n", proc_fork);
     return 0;
 }
 
@@ -400,8 +402,12 @@ int cmd_exit() {
     return 0;
 }
 
-void sig_handler(int signum) {
+void sig_handler(int signum, siginfo_t *info, void *context) {
     int status;
-    waitpid(-1, &status, WNOHANG);
-    printf("Child finished!\n");   
+    // waitpid(-1, &status, WNOHANG); 
+
+    info->si_pid;
+    waitpid(info->si_pid, &status, WNOHANG);
+
+    printf("[1] Done.\n");
 }

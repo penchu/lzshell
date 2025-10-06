@@ -18,6 +18,12 @@ static volatile bool working = true;
 int test = 0;
 int test2 = 1;
 
+enum State {
+    Running = 1,
+    Done = 0,
+    Stopped = -1
+};
+
 struct Command {
     const char *name;
     const char *descr;
@@ -29,7 +35,8 @@ struct Job_table {
     int job_num;
     pid_t pid;
     char *command;
-    int status;
+    enum State status;
+    // int status;
 };
 
 char *read_input();
@@ -77,7 +84,14 @@ int main() {
     sigaction(SIGCHLD, &sig, NULL);
 
     while (working) { 
-        if (test == test2) printf("[1] Done.\n");
+        // for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
+        //     if (jobs_list[i].pid == test2) {
+        //         printf("[%d] Done.\n", jobs_list[i].job_num);
+        //         break;
+        //     }
+        // }
+
+        // if (test == test2) printf("[1] Done.\n");
         printf("lzsh> ");
         line = read_input();
         if (!line) {
@@ -301,13 +315,22 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
         }
     }
     else if (proc_fork > 0) { //parent process return value is 1
+
+        // if (*background) {
+        //     jobs_list[0].job_num = 1;
+        //     jobs_list[0].pid = proc_fork;
+        //     jobs_list[0].status = Running;
+        //     printf("[%d] %d\n", jobs_list[0].job_num, jobs_list[0].pid);
+        //     *background = false;
+        // }
+
         int count = 0;
         if (*background) {            
             printf("[1] %d\n", proc_fork);
             test = proc_fork;
             *background = false;
-            jobs_list[count].pid = proc_fork;
-            jobs_list[count].status = 1;
+            // jobs_list[count].pid = proc_fork;
+            // jobs_list[count].status = 1;
         }        
         
         if (piping) {
@@ -327,20 +350,6 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
                 waitpid(pipe_fork, NULL, 0);
             }
         }
-        // else if (background) {
-        //     // fprintf(stderr, "\nChild %d is running in background!\n", proc_fork);
-        //     // fflush(stderr);
-        //     // char buffer[] = "\nChild %d is running in background!\n", proc_fork;
-        //     // strcpy(queue, buffer);
-        // }
-        // else if (background) { 
-        //     // waitpid(proc_fork, &status, WNOHANG);
-        //     printf("Child %d is running in background!\n", proc_fork);
-        //     // char *msg = "[1] %d\n", proc_fork;
-        //     // char *msg = "Child %d is running in background!\n";
-        //     // write(1, msg, strlen(msg));       
-        //     fflush(stdout);
-        // }
         else {
             wait(NULL);
         }
@@ -348,7 +357,6 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
     else {
         perror("fork failed");
     }
-    // if (test == proc_fork) printf("[1] Done.\n");
     return 0;
 }
 

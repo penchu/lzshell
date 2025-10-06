@@ -47,9 +47,9 @@ int cmd_echo(int argc, char **args);
 int cmd_help(); 
 int cmd_exit();
 int cmd_path();
-int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool *background, char **piped_cmd, char *redirection_file);
+char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool *background, char **piped_cmd, char *redirection_file);
 int redirection_draft(char **args, int redirection_type, char *redirection_file);
-int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping);
+int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping, char **bg_args);
 void sig_handler(int signum, siginfo_t *info, void *context);
 
 struct Command help_list[] = {
@@ -65,6 +65,7 @@ struct Job_table jobs_list[MAX_JOBS];
 int main() {
     // bool working = true;   
     char *line = NULL;
+    char **bg_args = NULL;
     char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
     char redirection_file[MAX_WORD_LENGTH] = {0};
     char *piped_cmd[MAX_WORD_LENGTH] = {0};
@@ -104,13 +105,13 @@ int main() {
         }
         else {
             parse_input(args, line, &n, &redirection_type, &redirection, &piping, &background, piped_cmd, redirection_file);
-            if (!cmd_dispatch(&builtin_handler, args, n, piping)) run_external(n, builtin_handler, args, redirection_type, redirection, piping, &background, piped_cmd, redirection_file);
+            if (!cmd_dispatch(&builtin_handler, args, n, piping)) bg_args = run_external(n, builtin_handler, args, redirection_type, redirection, piping, &background, piped_cmd, redirection_file);
         }
         // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
         //     // printf("args[%d] = %s\n", i, args[i]);
         //     printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
         // }
-        cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping);        
+        cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping, bg_args);        
     }
     return 0;
 }
@@ -206,10 +207,6 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
 int cmd_dispatch(int (**builtin_handler)(int argc, char *argv[]), char **args, int n, bool piping) {
     int help_len = sizeof(help_list) / sizeof(help_list[0]);
     for (int i = 0; args[i] != NULL; i++) {
-        // if (strcmp(args[i], "ext") == 0) {
-        //     working = false;
-        //     return 1;
-        // }            
         for (int j = 0; j < help_len; j++) {
             if (strcmp(args[i], help_list[j].name) == 0) {
                 if (help_list[j].pipeable && piping) {
@@ -283,16 +280,23 @@ int cmd_help() {
     return 0;
 }
 
-int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool *background, char **piped_cmd, char *redirection_file) {
+char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool *background, char **piped_cmd, char *redirection_file) {
     int fd_p[2];
     if (piping) pipe(fd_p); //creating a pipe with the array of 2 int needed dor it and checking for an error
     if (fd_p < 0) {  
         perror("pipe");
         exit(1);
     }
-    
-    pid_t proc_fork = fork();//for external commands, creating a child process  
+
+    char **args_child = malloc(sizeof(char*) * MAX_WORD_LENGTH);
+    for (int i = 0; args[i] != NULL; i++) {
+        args_child[i] = strdup(args[i]);
+    }
+    // strdup(args); // creating a duplicate array for the child process to use to not interfere when there is a bg
+
+    pid_t proc_fork = fork(); //for external commands, creating a child process  
     if (proc_fork == 0) { //return value 0 is for the child process  
+
         if (piping) { 
             dup2(fd_p[1], 1);
             close(fd_p[0]);
@@ -302,14 +306,14 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
                 _exit(0);
             }
             else {
-                execvp(args[0], args);
+                execvp(args_child[0], args_child);
                 perror("exec failed1");
                 exit(1);
             }
         }
         else { 
             if (redirection) redirection_draft(args, redirection_type, redirection_file); //it's changing the output from the terminal to the file 
-            execvp(args[0], args);
+            execvp(args_child[0], args_child);
             perror("exec failed2");
             exit(1);
         }
@@ -324,15 +328,15 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
         //     *background = false;
         // }
 
-        int count = 0;
-        if (*background) {            
-            printf("[1] %d\n", proc_fork);
-            test = proc_fork;
-            *background = false;
-            // jobs_list[count].pid = proc_fork;
-            // jobs_list[count].status = 1;
-        }        
-        
+        // int count = 0;
+        // if (*background) {            
+        //     printf("[1] %d\n", proc_fork);
+        //     test = proc_fork;
+        //     *background = false;
+        //     // jobs_list[count].pid = proc_fork;
+        //     // jobs_list[count].status = 1;
+        // }        
+      
         if (piping) {
             pid_t pipe_fork = fork(); //creating another child process for the other end of the pipe
             if (pipe_fork == 0) {
@@ -351,17 +355,18 @@ int run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **a
             }
         }
         else {
-            wait(NULL);
+            if (!(*background)) wait(NULL);
         }
     }
     else {
         perror("fork failed");
     }
-    return 0;
+    // return 0;
+    return args_child;
 }
 
 int redirection_draft(char **args, int redirection_type, char *redirection_file) {
-    // for (int i = 0; redirection_file[i] != '\0'; i++) {
+    // for (int i = 0; redirection_file[i] != '\0'; i++) { //redirection file check
     //     printf("%c", redirection_file[i]);
     // }
     // printf("\n");   
@@ -384,20 +389,22 @@ int redirection_draft(char **args, int redirection_type, char *redirection_file)
         }
         dup2(fd, 0);
         close(fd);
-    }    
-    // memset(redirection_file, 0, sizeof(redirection_file));
-    // redirection_file[0] = '\0'; //should work almost as the memset, but zeroing out the first will stop the access
+    }
     return 0;
 }
 
-int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping) {
+int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping, char **bg_args) {
     for (int i = 0; args[i] != NULL; i++) {
         free(args[i]);
         args[i] = NULL; //optional, suggested by chatgpt
     }
     memset(args, 0, sizeof(args));
+
     free(line);
     line = NULL; //optional, suggested by chatgpt
+
+    free(bg_args);
+    bg_args = NULL;
     
     for (int i = 0; piped_cmd[i] != NULL; i++) {
         free(piped_cmd[i]);

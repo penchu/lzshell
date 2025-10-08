@@ -10,6 +10,7 @@
 
 #define MAX_WORD_LENGTH 128
 #define MAX_JOBS 10
+#define INITIAL_ARG_CAPACITY 10
 
 typedef int (*ptr_func)(int argc, char *argv[]);
 
@@ -66,7 +67,9 @@ int main() {
     // bool working = true;   
     char *line = NULL;
     char **bg_args = NULL;
-    char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
+    // char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
+    char **args = calloc(INITIAL_ARG_CAPACITY, sizeof(char *)); //declaring it as a dynamic array with memory for 10 pointers/strings
+    //the above declaration should be changed for the other arrays, MAX_WORD_LENGTH is misleading 
     char redirection_file[MAX_WORD_LENGTH] = {0};
     char *piped_cmd[MAX_WORD_LENGTH] = {0};
     int n = 0; //number of tokens
@@ -117,17 +120,31 @@ int main() {
 }
 
 char *read_input() {
-    char *buff = calloc(1024, 1);
+    size_t buff_size = 128;
+    char *buff = calloc(1, buff_size);
     if (buff == NULL) {
         perror("malloc");
         exit(1);
     }
     
-    if (fgets(buff, 1024, stdin) == NULL && errno != 4) {
+    if (fgets(buff, buff_size, stdin) == NULL && errno != 4) {
         cmd_exit();
         return NULL;
     } 
-    buff[strcspn(buff, "\n")] = '\0'; //removing the new line at the back and terminating it 
+
+    size_t len_strcspn = strcspn(buff, "\n");
+    if (len_strcspn < buff_size) buff[len_strcspn] = '\0';
+    else {
+        buff_size *= 2;
+        buff = realloc(buff, buff_size);
+        // fgets(buff + len_strcspn, buff_size, stdin);
+        if (fgets(buff + len_strcspn, buff_size, stdin) == NULL && errno != 4) {
+            cmd_exit();
+            return NULL;
+        } 
+    }
+
+    // buff[strcspn(buff, "\n")] = '\0'; //removing the new line at the back and terminating it 
     return buff;
 }
 
@@ -139,8 +156,8 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
     int m_pipe = 0;
     bool space_pipe;
 
-    args[0] = calloc(MAX_WORD_LENGTH, 1);
-    piped_cmd[0] = calloc(MAX_WORD_LENGTH, 1);
+    args[0] = calloc(1, MAX_WORD_LENGTH);
+    piped_cmd[0] = calloc(1, MAX_WORD_LENGTH);
     for (int i = 0; line[i] != '\0'; i++) {
         if (line[i] == '"') {
             i++;
@@ -184,7 +201,8 @@ int parse_input (char **args, char *line, int *n, int *redirection_type, bool *r
         }
         if ((line[i] == ' ' || line[i] == '\t')  && (!space)) {
             space = true;
-            if (line[i+1] != '>' && line[i+1] != '<' && line[i+1] != '|') args[++(*n)] = calloc(MAX_WORD_LENGTH, 1); //not allocating memory if there is a redirection, changed malloc with calloc which allocates zeroed memory and no garbage issues
+            if (line[i+1] != '>' && line[i+1] != '<' && line[i+1] != '|') args[++(*n)] = calloc(1, MAX_WORD_LENGTH); //not allocating memory if there is a redirection, changed malloc with calloc which allocates zeroed memory and no garbage issues
+            if (*n + 1 == INITIAL_ARG_CAPACITY) args = realloc(args, INITIAL_ARG_CAPACITY * 1.5); //reallocating pointer memory if its over
             m = 0;   
             continue;           
         }
@@ -288,12 +306,12 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
         exit(1);
     }
 
-    char **args_child = malloc(sizeof(char*) * MAX_WORD_LENGTH);
-    for (int i = 0; args[i] != NULL; i++) {
-        args_child[i] = strdup(args[i]);
-    }
-    // strdup(args); // creating a duplicate array for the child process to use to not interfere when there is a bg
-
+    char **args_child = calloc(MAX_WORD_LENGTH, sizeof(char *));
+    // for (int i = 0; args[i] != NULL; i++) {
+    //     args_child[i] = 
+    //     args_child[i] = strdup(args[i]);
+    // }
+    
     pid_t proc_fork = fork(); //for external commands, creating a child process  
     if (proc_fork == 0) { //return value 0 is for the child process  
 

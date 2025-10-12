@@ -15,6 +15,7 @@
 typedef int (*ptr_func)(int argc, char *argv[]);
 
 static volatile bool working = true;
+volatile sig_atomic_t child_exited = 0;
 
 int test = 0;
 int test2 = 1;
@@ -72,17 +73,18 @@ int main() {
     //the above declaration should be changed for the other arrays, MAX_WORD_LENGTH is misleading 
     char redirection_file[MAX_WORD_LENGTH] = {0};
     char *piped_cmd[MAX_WORD_LENGTH] = {0};
-    int n = 0; //number of tokens
+    int n = 0; //tracking the tokens
     bool redirection = false; //for if > is encountered 
     bool piping = false;
     bool background = false;
     int redirection_type;  
     int (*builtin_handler)(int argc, char *argv[]) = NULL; 
+    int status;
 
     struct sigaction sig;
     // sig.sa_handler = sig_handler;
     sig.sa_sigaction = sig_handler;
-    sig.sa_flags = SA_SIGINFO;
+    sig.sa_flags = SA_SIGINFO | SA_RESTART; //adding restart for clearing issue with a blocked parent or whatever it is 
     sigemptyset(&sig.sa_mask);
 
     sigaction(SIGCHLD, &sig, NULL);
@@ -95,7 +97,18 @@ int main() {
         //     }
         // }
 
-        // if (test == test2) printf("[1] Done.\n");
+        // int status;
+        if (child_exited) { //chatgtp suggestion, bypassing the waitpid call from the handler and using it only for the flag and tracking the pid with info, the flag is for avoiding checking errno for interrupts and the second fork
+            while (waitpid(-1, &status, WNOHANG));            
+            child_exited = 0;
+            fflush(stdout);
+        }
+        if (test == test2) {
+            printf("[1] Done.\n");
+            test = 0;
+            test2 = 1;
+        }  
+
         printf("lzsh> ");
         line = read_input();
         if (!line) {
@@ -111,9 +124,10 @@ int main() {
             if (!cmd_dispatch(&builtin_handler, args, n, piping)) bg_args = run_external(n, builtin_handler, args, redirection_type, redirection, piping, &background, piped_cmd, redirection_file);
         }
         // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
-        //     // printf("args[%d] = %s\n", i, args[i]);
-        //     printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
+        //     printf("args[%d] = %s\n", i, args[i]);
+        //     // printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
         // }
+        // printf("%d\n", errno);
         cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping, bg_args);        
     }
     return 0;
@@ -127,7 +141,8 @@ char *read_input() {
         exit(1);
     }
     
-    if (fgets(buff, buff_size, stdin) == NULL && errno != 4) {
+    if (fgets(buff, buff_size, stdin) == NULL && errno != EINTR) {
+    // if (fgets(buff, buff_size, stdin) == NULL && (errno != 4)) {
         cmd_exit();
         return NULL;
     } 
@@ -306,78 +321,85 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
         exit(1);
     }
 
-    char **args_child = calloc(MAX_WORD_LENGTH, sizeof(char *));
-    // for (int i = 0; args[i] != NULL; i++) {
-    //     args_child[i] = 
-    //     args_child[i] = strdup(args[i]);
-    // }
+    char **args_child = calloc(n+2, sizeof(char *)); //creating new array copy of args to have for the child processes and not interfere with the parent which may start another command while the child is still running
     
-    pid_t proc_fork = fork(); //for external commands, creating a child process  
-    if (proc_fork == 0) { //return value 0 is for the child process  
-
-        if (piping) { 
-            dup2(fd_p[1], 1);
-            close(fd_p[0]);
-            if (builtin_handler) {  
-                builtin_handler(n, args); //trying to implement calling the function if the command is builtin, maybe should be done somewhere else
-                close(fd_p[1]);
-                _exit(0);
+    for (int i = 0; args[i] != NULL; i++) { //copying from args the command and arguments
+        args_child[i] = strdup(args[i]);
+    }
+    args_child[n+1] = NULL; 
+    
+    // if (errno != 4) {
+    if (!child_exited) { //maybe it should be the opposite
+        pid_t proc_fork = fork(); //for external commands, creating a child process  
+        if (proc_fork == 0) { //return value 0 is for the child process  
+            if (piping) { 
+                dup2(fd_p[1], 1);
+                close(fd_p[0]);
+                if (builtin_handler) {  
+                    builtin_handler(n, args_child); //trying to implement calling the function if the command is builtin, maybe should be done somewhere else
+                    close(fd_p[1]);
+                    _exit(0);
+                }
+                else {
+                    execvp(args_child[0], args_child);
+                    perror("exec failed1");
+                    exit(1);
+                }
             }
             else {
+                if (redirection) redirection_draft(args, redirection_type, redirection_file); //it's changing the output from the terminal to the file 
+                // printf("Executing: '%s'\n", args_child[0]);
                 execvp(args_child[0], args_child);
-                perror("exec failed1");
+                perror("exec failed2");
                 exit(1);
             }
         }
-        else { 
-            if (redirection) redirection_draft(args, redirection_type, redirection_file); //it's changing the output from the terminal to the file 
-            execvp(args_child[0], args_child);
-            perror("exec failed2");
-            exit(1);
-        }
-    }
-    else if (proc_fork > 0) { //parent process return value is 1
+        else if (proc_fork > 0) { //parent process return value is 1
+            // if (*background) {
+            //     jobs_list[0].job_num = 1;
+            //     jobs_list[0].pid = proc_fork;
+            //     jobs_list[0].status = Running;
+            //     printf("[%d] %d\n", jobs_list[0].job_num, jobs_list[0].pid);
+            //     *background = false;
+            // }
 
-        // if (*background) {
-        //     jobs_list[0].job_num = 1;
-        //     jobs_list[0].pid = proc_fork;
-        //     jobs_list[0].status = Running;
-        //     printf("[%d] %d\n", jobs_list[0].job_num, jobs_list[0].pid);
-        //     *background = false;
-        // }
-
-        // int count = 0;
-        // if (*background) {            
-        //     printf("[1] %d\n", proc_fork);
-        //     test = proc_fork;
-        //     *background = false;
-        //     // jobs_list[count].pid = proc_fork;
-        //     // jobs_list[count].status = 1;
-        // }        
-      
-        if (piping) {
-            pid_t pipe_fork = fork(); //creating another child process for the other end of the pipe
-            if (pipe_fork == 0) {
-                close(fd_p[1]);
-                dup2(fd_p[0], 0);
-                close(fd_p[0]);
-                execvp(piped_cmd[0], piped_cmd);
-                perror("exec failed3");
-                exit(1);
+            // int count = 0;
+            // if (*background) {            
+            //     printf("[1] %d\n", proc_fork);
+            //     test = proc_fork;
+            //     *background = false;
+            //     // jobs_list[count].pid = proc_fork;
+            //     // jobs_list[count].status = 1;
+            // }        
+        
+            if (piping) {
+                pid_t pipe_fork = fork(); //creating another child process for the other end of the pipe
+                if (pipe_fork == 0) {
+                    close(fd_p[1]);
+                    dup2(fd_p[0], 0);
+                    close(fd_p[0]);
+                    execvp(piped_cmd[0], piped_cmd);
+                    perror("exec failed3");
+                    exit(1);
+                }
+                else if (pipe_fork > 0) {
+                    close(fd_p[1]);
+                    close(fd_p[0]);
+                    waitpid(proc_fork, NULL, 0);
+                    waitpid(pipe_fork, NULL, 0);
+                }
             }
-            else if (pipe_fork > 0) {
-                close(fd_p[1]);
-                close(fd_p[0]);
-                waitpid(proc_fork, NULL, 0);
-                waitpid(pipe_fork, NULL, 0);
+            else {
+                if (!(*background)) wait(NULL);
+                else {
+                    test = proc_fork;
+                    *background = false;
+                }
             }
         }
         else {
-            if (!(*background)) wait(NULL);
+            perror("fork failed");
         }
-    }
-    else {
-        perror("fork failed");
     }
     // return 0;
     return args_child;
@@ -414,15 +436,23 @@ int redirection_draft(char **args, int redirection_type, char *redirection_file)
 int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping, char **bg_args) {
     for (int i = 0; args[i] != NULL; i++) {
         free(args[i]);
+        free(bg_args[i]);
         args[i] = NULL; //optional, suggested by chatgpt
+        bg_args[i] = NULL;
     }
     memset(args, 0, sizeof(args));
+    memset(bg_args, 0, sizeof(bg_args));
 
     free(line);
     line = NULL; //optional, suggested by chatgpt
 
-    free(bg_args);
-    bg_args = NULL;
+    // free(bg_args);
+    // bg_args = NULL;
+    // for (int i = 0; bg_args[i] != NULL; i++) {
+    //     free(bg_args[i]);
+    //     bg_args[i] = NULL; //optional, suggested by chatgpt
+    // }
+    // memset(bg_args, 0, sizeof(bg_args));
     
     for (int i = 0; piped_cmd[i] != NULL; i++) {
         free(piped_cmd[i]);
@@ -436,6 +466,7 @@ int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, i
     *redirection_type = 2;
     // piped_cmd[0] = '\0';
     *piping = false;
+    // errno = 10;
     return 0;
 }
 
@@ -458,11 +489,12 @@ int cmd_exit() {
 }
 
 void sig_handler(int signum, siginfo_t *info, void *context) {
-    int status;
+    // int status;
+    child_exited = 1;
     // waitpid(-1, &status, WNOHANG); 
 
     // test = info->si_pid;
-    waitpid(info->si_pid, &status, WNOHANG);
+    // waitpid(info->si_pid, &status, WNOHANG);
     test2 = info->si_pid;
 
     // printf("[1] Done.\n");

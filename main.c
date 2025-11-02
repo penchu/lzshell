@@ -67,7 +67,7 @@ struct Job_table jobs_list[MAX_JOBS];
 int main() {
     // bool working = true;   
     char *line = NULL;
-    char **bg_args = NULL;
+    char **bg_args = calloc(INITIAL_ARG_CAPACITY, sizeof(char *));;
     // char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
     char **args = calloc(INITIAL_ARG_CAPACITY, sizeof(char *)); //declaring it as a dynamic array with memory for 10 pointers/strings
     //the above declaration should be changed for the other arrays, MAX_WORD_LENGTH is misleading 
@@ -87,7 +87,7 @@ int main() {
     sig.sa_flags = SA_SIGINFO | SA_RESTART; //adding restart for clearing issue with a blocked parent or whatever it is 
     sigemptyset(&sig.sa_mask);
 
-    sigaction(SIGCHLD, &sig, NULL);
+    // sigaction(SIGCHLD, &sig, NULL);
 
     while (working) { 
         // for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
@@ -96,7 +96,7 @@ int main() {
         //         break;
         //     }
         // }
-
+        
         // int status;
         if (child_exited) { //chatgtp suggestion, bypassing the waitpid call from the handler and using it only for the flag and tracking the pid with info, the flag is for avoiding checking errno for interrupts and the second fork
             while (waitpid(-1, &status, WNOHANG));            
@@ -121,7 +121,8 @@ int main() {
         }
         else {
             parse_input(args, line, &n, &redirection_type, &redirection, &piping, &background, piped_cmd, redirection_file);
-            if (!cmd_dispatch(&builtin_handler, args, n, piping)) bg_args = run_external(n, builtin_handler, args, redirection_type, redirection, piping, &background, piped_cmd, redirection_file);
+            if (!cmd_dispatch(&builtin_handler, args, n, piping)) 
+                bg_args = run_external(n, builtin_handler, args, redirection_type, redirection, piping, &background, piped_cmd, redirection_file);
         }
         // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
         //     printf("args[%d] = %s\n", i, args[i]);
@@ -435,9 +436,9 @@ int redirection_draft(char **args, int redirection_type, char *redirection_file)
 
 int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping, char **bg_args) {
     for (int i = 0; args[i] != NULL; i++) {
-        free(args[i]);
-        free(bg_args[i]);
+        free(args[i]);        
         args[i] = NULL; //optional, suggested by chatgpt
+        free(bg_args[i]);
         bg_args[i] = NULL;
     }
     memset(args, 0, sizeof(args));

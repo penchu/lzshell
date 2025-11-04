@@ -87,7 +87,7 @@ int main() {
     sig.sa_flags = SA_SIGINFO | SA_RESTART; //adding restart for clearing issue with a blocked parent or whatever it is 
     sigemptyset(&sig.sa_mask);
 
-    // sigaction(SIGCHLD, &sig, NULL);
+    sigaction(SIGCHLD, &sig, NULL);
 
     while (working) { 
         // for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
@@ -99,15 +99,20 @@ int main() {
         
         // int status;
         if (child_exited) { //chatgtp suggestion, bypassing the waitpid call from the handler and using it only for the flag and tracking the pid with info, the flag is for avoiding checking errno for interrupts and the second fork
-            while (waitpid(-1, &status, WNOHANG));            
+            while (waitpid(-1, &status, WNOHANG) > 0);            
             child_exited = 0;
-            fflush(stdout);
+            if (test == test2) {
+                printf("[1] Done.\n");
+                test = 0;
+                test2 = 1;
+            } 
+            // fflush(stdout);
         }
-        if (test == test2) {
-            printf("[1] Done.\n");
-            test = 0;
-            test2 = 1;
-        }  
+        // if (test == test2) {
+        //     printf("[1] Done.\n");
+        //     test = 0;
+        //     test2 = 1;
+        // }  
 
         printf("lzsh> ");
         line = read_input();
@@ -330,7 +335,7 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
     args_child[n+1] = NULL; 
     
     // if (errno != 4) {
-    if (!child_exited) { //maybe it should be the opposite
+    if (!child_exited) { //avoiding doing another fork with this flag in place
         pid_t proc_fork = fork(); //for external commands, creating a child process  
         if (proc_fork == 0) { //return value 0 is for the child process  
             if (piping) { 
@@ -349,13 +354,13 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
             }
             else {
                 if (redirection) redirection_draft(args, redirection_type, redirection_file); //it's changing the output from the terminal to the file 
-                // printf("Executing: '%s'\n", args_child[0]);
                 execvp(args_child[0], args_child);
                 perror("exec failed2");
                 exit(1);
             }
         }
         else if (proc_fork > 0) { //parent process return value is 1
+            int status;
             // if (*background) {
             //     jobs_list[0].job_num = 1;
             //     jobs_list[0].pid = proc_fork;
@@ -391,7 +396,8 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
                 }
             }
             else {
-                if (!(*background)) wait(NULL);
+                // if (!(*background)) wait(NULL);
+                if (!(*background)) waitpid(proc_fork, &status, 0);
                 else {
                     test = proc_fork;
                     *background = false;
@@ -402,7 +408,6 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
             perror("fork failed");
         }
     }
-    // return 0;
     return args_child;
 }
 

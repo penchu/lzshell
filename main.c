@@ -18,7 +18,7 @@ static volatile bool working = true;
 // volatile sig_atomic_t child_exited = 0;
 
 int test = 0;
-int test2 = 1;
+// int test2 = 1;
 
 enum State {
     Running = 1,
@@ -67,7 +67,7 @@ struct Job_table jobs_list[MAX_JOBS];
 int main() {
     // bool working = true;   
     char *line = NULL;
-    char **bg_args = calloc(INITIAL_ARG_CAPACITY, sizeof(char *));;
+    char **bg_args = calloc(INITIAL_ARG_CAPACITY, sizeof(char *));
     // char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
     char **args = calloc(INITIAL_ARG_CAPACITY, sizeof(char *)); //declaring it as a dynamic array with memory for 10 pointers/strings
     //the above declaration should be changed for the other arrays, MAX_WORD_LENGTH is misleading 
@@ -90,13 +90,16 @@ int main() {
     sigaction(SIGCHLD, &sig, NULL);
 
     while (working) { 
+        
+        // printf("%d\n", jobs_list[0].pid);
+        // printf("%d\n", test);
+
         // for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
-        //     if (jobs_list[i].pid == test2) {
+        //     if (jobs_list[i].pid == test) {
         //         printf("[%d] Done.\n", jobs_list[i].job_num);
         //         break;
         //     }
-        // }
-        
+        // }        
         // int status;
         // if (child_exited) { //chatgtp suggestion, bypassing the waitpid call from the handler and using it only for the flag and tracking the pid with info, the flag is for avoiding checking errno for interrupts and the second fork
         //     while (waitpid(-1, &status, WNOHANG) > 0);            
@@ -113,9 +116,14 @@ int main() {
         //     test = 0;
         //     test2 = 1;
         // }  
-
+        // printf("%d, %d\n", test, test2);
         // if (test == test2) {
         //     printf("[1] Done.\n");
+        //     test = 0;
+        //     test2 = 1;
+        // } 
+        // if (test == test2) {
+        //     write(STDOUT_FILENO, "Done\n", 5);
         //     test = 0;
         //     test2 = 1;
         // } 
@@ -135,6 +143,14 @@ int main() {
             if (!cmd_dispatch(&builtin_handler, args, n, piping)) 
                 bg_args = run_external(n, builtin_handler, args, redirection_type, redirection, piping, &background, piped_cmd, redirection_file);
         }
+
+        for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
+            if (jobs_list[i].pid == test) {
+                printf("[%d] Done.\n", jobs_list[i].job_num);
+                break;
+            }
+        }
+
         // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
         //     printf("args[%d] = %s\n", i, args[i]);
         //     // printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
@@ -339,9 +355,7 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
         args_child[i] = strdup(args[i]);
     }
     args_child[n+1] = NULL; 
-    
-    // if (errno != 4) {
-    // if (!child_exited) { //avoiding doing another fork with this flag in place, but it's blocking external processes 
+
     pid_t proc_fork = fork(); //for external commands, creating a child process  
     if (proc_fork == 0) { //return value 0 is for the child process  
         if (piping) { 
@@ -366,23 +380,7 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
         }
     }
     else if (proc_fork > 0) { //parent process return value is 1
-        int status;
-        // if (*background) {
-        //     jobs_list[0].job_num = 1;
-        //     jobs_list[0].pid = proc_fork;
-        //     jobs_list[0].status = Running;
-        //     printf("[%d] %d\n", jobs_list[0].job_num, jobs_list[0].pid);
-        //     *background = false;
-        // }
-
-        // int count = 0;
-        // if (*background) {            
-        //     printf("[1] %d\n", proc_fork);
-        //     test = proc_fork;
-        //     *background = false;
-        //     // jobs_list[count].pid = proc_fork;
-        //     // jobs_list[count].status = 1;
-        // }        
+        int status;   
     
         if (piping) {
             pid_t pipe_fork = fork(); //creating another child process for the other end of the pipe
@@ -405,7 +403,11 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
             // if (!(*background)) wait(NULL);
             if (!(*background)) waitpid(proc_fork, &status, 0);
             else {
-                test = proc_fork;
+                jobs_list[0].job_num = 1;
+                jobs_list[0].pid = proc_fork;
+                jobs_list[0].status = Running;
+                printf("[%d] %d\n", jobs_list[0].job_num, jobs_list[0].pid);
+                // test = proc_fork;
                 *background = false;
             }
         }
@@ -502,19 +504,6 @@ int cmd_exit() {
 
 void sig_handler(int signum, siginfo_t *info, void *context) {
     int status;
-    while (waitpid(-1, &status, WNOHANG) > 0);
-    test2 = info->si_pid;
-
-    if (test == test2) {
-        write(STDOUT_FILENO, "Done\n", 5);
-        test = 0;
-        test2 = 1;
-    } 
-
-    // child_exited = 1;
-    // waitpid(-1, &status, WNOHANG); 
-    // test = info->si_pid;
-    // waitpid(info->si_pid, &status, WNOHANG);
-    // test2 = info->si_pid;
-    // printf("[1] Done.\n");
+    test = info->si_pid;
+    while (waitpid(-1, &status, WNOHANG) > 0); 
 }

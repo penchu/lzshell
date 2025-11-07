@@ -15,10 +15,9 @@
 typedef int (*ptr_func)(int argc, char *argv[]);
 
 static volatile bool working = true;
-// volatile sig_atomic_t child_exited = 0;
 
 int test = 0;
-// int test2 = 1;
+int proc_count = 0;
 
 enum State {
     Running = 1,
@@ -33,13 +32,12 @@ struct Command {
     ptr_func handler;
 };
 
-struct Job_table {
+typedef struct {
     int job_num;
-    pid_t pid;
-    char *command;
+    pid_t pid;    
     enum State status;
-    // int status;
-};
+    // char *command;
+} Job_table;
 
 char *read_input();
 int parse_input(char **args, char *line, int *n, int *redirection_type, bool *redirection, bool *piping, bool *background, char **piped_cmd, char *redirection_file);
@@ -51,7 +49,7 @@ int cmd_exit();
 int cmd_path();
 char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char **args, int redirection_type, bool redirection, bool piping, bool *background, char **piped_cmd, char *redirection_file);
 int redirection_draft(char **args, int redirection_type, char *redirection_file);
-int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping, char **bg_args);
+int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping, char **bg_args, Job_table jobs_list[]);
 void sig_handler(int signum, siginfo_t *info, void *context);
 
 struct Command help_list[] = {
@@ -62,10 +60,9 @@ struct Command help_list[] = {
     {"help", "Display information about builtin commands.", true, cmd_help},    
 };
 
-struct Job_table jobs_list[MAX_JOBS];
+Job_table jobs_list[MAX_JOBS];
 
-int main() {
-    // bool working = true;   
+int main() { 
     char *line = NULL;
     char **bg_args = calloc(INITIAL_ARG_CAPACITY, sizeof(char *));
     // char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
@@ -93,7 +90,6 @@ int main() {
         
         // printf("%d\n", jobs_list[0].pid);
         // printf("%d\n", test);
-
         // for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
         //     if (jobs_list[i].pid == test) {
         //         printf("[%d] Done.\n", jobs_list[i].job_num);
@@ -147,6 +143,9 @@ int main() {
         for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
             if (jobs_list[i].pid == test) {
                 printf("[%d] Done.\n", jobs_list[i].job_num);
+                jobs_list[i].status = Done;
+                test = 0;
+                proc_count--;
                 break;
             }
         }
@@ -156,7 +155,7 @@ int main() {
         //     // printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
         // }
         // printf("%d\n", errno);
-        cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping, bg_args);        
+        cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping, bg_args, jobs_list);        
     }
     return 0;
 }
@@ -357,6 +356,13 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
     args_child[n+1] = NULL; 
 
     pid_t proc_fork = fork(); //for external commands, creating a child process  
+
+    // int proc_count = 0;
+    // jobs_list[proc_count].job_num = proc_count + 1;
+    // jobs_list[proc_count].pid = proc_fork;
+    // jobs_list[proc_count].status = Running;
+    // proc_count++;
+
     if (proc_fork == 0) { //return value 0 is for the child process  
         if (piping) { 
             dup2(fd_p[1], 1);
@@ -403,12 +409,25 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
             // if (!(*background)) wait(NULL);
             if (!(*background)) waitpid(proc_fork, &status, 0);
             else {
-                jobs_list[0].job_num = 1;
-                jobs_list[0].pid = proc_fork;
-                jobs_list[0].status = Running;
-                printf("[%d] %d\n", jobs_list[0].job_num, jobs_list[0].pid);
-                // test = proc_fork;
-                *background = false;
+
+                for (int i = 0; jobs_list[i].job_num == '\0'; i++) { //the idea for now is to rewrite a slot where the process is done
+                    if (jobs_list[i].status == Done) {
+                        jobs_list[i].job_num = ++proc_count;
+                        jobs_list[i].pid = proc_fork;
+                        jobs_list[i].status = Running; 
+                        // proc_count++;
+                        printf("[%d] %d\n", jobs_list[i].job_num, jobs_list[i].pid);
+                        *background = false;   
+                        break;
+                    }
+                }
+
+                // jobs_list[proc_count].job_num = proc_count + 1;
+                // jobs_list[proc_count].pid = proc_fork;
+                // jobs_list[proc_count].status = Running;
+                // proc_count++;
+                // printf("[%d] %d\n", jobs_list[0].job_num, jobs_list[0].pid);
+                // *background = false;
             }
         }
     }
@@ -447,7 +466,10 @@ int redirection_draft(char **args, int redirection_type, char *redirection_file)
     return 0;
 }
 
-int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping, char **bg_args) {
+int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, int *n, int *redirection_type, bool *piping, char **bg_args, Job_table jobs_list[]) {
+    free(line);
+    line = NULL; //optional, suggested by chatgpt
+    
     for (int i = 0; args[i] != NULL; i++) {
         free(args[i]);        
         args[i] = NULL; //optional, suggested by chatgpt
@@ -456,9 +478,6 @@ int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, i
     }
     memset(args, 0, sizeof(args));
     memset(bg_args, 0, sizeof(bg_args));
-
-    free(line);
-    line = NULL; //optional, suggested by chatgpt
 
     // free(bg_args);
     // bg_args = NULL;
@@ -474,6 +493,8 @@ int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, i
     }
     memset(piped_cmd, 0, sizeof(piped_cmd));
 
+  
+    
     *n = 0;
     // memset(redirection_file, 0, sizeof(redirection_file)); 
     redirection_file[0] = '\0';

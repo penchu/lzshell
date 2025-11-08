@@ -18,6 +18,8 @@ static volatile bool working = true;
 
 int test = 0;
 int proc_count = 0;
+int all_proc_count = 0;
+int handler_list[MAX_JOBS*2];
 
 enum State {
     Running = 1,
@@ -70,6 +72,7 @@ int main() {
     //the above declaration should be changed for the other arrays, MAX_WORD_LENGTH is misleading 
     char redirection_file[MAX_WORD_LENGTH] = {0};
     char *piped_cmd[MAX_WORD_LENGTH] = {0};
+    // int handler_list[MAX_JOBS*2];
     int n = 0; //tracking the tokens
     bool redirection = false; //for if > is encountered 
     bool piping = false;
@@ -140,7 +143,21 @@ int main() {
                 bg_args = run_external(n, builtin_handler, args, redirection_type, redirection, piping, &background, piped_cmd, redirection_file);
         }
 
+        // for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
+        //     printf("%d, %d, %d\n", jobs_list[i].job_num, jobs_list[i].pid, jobs_list[i].status);
+        //     for (int j = 0; j <= all_proc_count; j++) {
+        //         if (jobs_list[i].pid == handler_list[j]) {
+        //             printf("[%d] Done.\n", jobs_list[i].job_num);
+        //             jobs_list[i].status = Done;
+        //             test = 0;
+        //             proc_count--;
+        //             break;
+        //         }
+        //     }
+        // }
+
         for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
+            printf("%d, %d, %d\n", jobs_list[i].job_num, jobs_list[i].pid, jobs_list[i].status);            
             if (jobs_list[i].pid == test) {
                 printf("[%d] Done.\n", jobs_list[i].job_num);
                 jobs_list[i].status = Done;
@@ -148,7 +165,9 @@ int main() {
                 proc_count--;
                 break;
             }
+            
         }
+
 
         // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
         //     printf("args[%d] = %s\n", i, args[i]);
@@ -356,7 +375,7 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
     args_child[n+1] = NULL; 
 
     pid_t proc_fork = fork(); //for external commands, creating a child process  
-
+    all_proc_count++;
     // int proc_count = 0;
     // jobs_list[proc_count].job_num = proc_count + 1;
     // jobs_list[proc_count].pid = proc_fork;
@@ -408,14 +427,13 @@ char **run_external(int n, int (*builtin_handler)(int argc, char *argv[]), char 
         else {
             // if (!(*background)) wait(NULL);
             if (!(*background)) waitpid(proc_fork, &status, 0);
-            else {
-
-                for (int i = 0; jobs_list[i].job_num == '\0'; i++) { //the idea for now is to rewrite a slot where the process is done
-                    if (jobs_list[i].status == Done) {
-                        jobs_list[i].job_num = ++proc_count;
+            else {                
+                for (int i = 0; i <= proc_count; i++) { //the idea for now is to rewrite a slot where the process is done
+                    if (jobs_list[i].status == Done || i == proc_count) {
+                        jobs_list[i].job_num = proc_count + 1;
                         jobs_list[i].pid = proc_fork;
                         jobs_list[i].status = Running; 
-                        // proc_count++;
+                        proc_count++;
                         printf("[%d] %d\n", jobs_list[i].job_num, jobs_list[i].pid);
                         *background = false;   
                         break;
@@ -525,6 +543,7 @@ int cmd_exit() {
 
 void sig_handler(int signum, siginfo_t *info, void *context) {
     int status;
-    test = info->si_pid;
+    test = info->si_pid; //need to differentiate between what id is saved here, as if it is a bg proc a new external is messing with this and prevent reaping
+    // handler_list[all_proc_count] = info->si_pid;
     while (waitpid(-1, &status, WNOHANG) > 0); 
 }

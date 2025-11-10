@@ -66,7 +66,8 @@ Job_table jobs_list[MAX_JOBS];
 
 int main() { 
     char *line = NULL;
-    char **bg_args = calloc(INITIAL_ARG_CAPACITY, sizeof(char *));
+    // char **bg_args = calloc(INITIAL_ARG_CAPACITY, sizeof(char *));
+    char **bg_args;
     // char *args[MAX_WORD_LENGTH] = {0}; //array for each token of the input
     char **args = calloc(INITIAL_ARG_CAPACITY, sizeof(char *)); //declaring it as a dynamic array with memory for 10 pointers/strings
     //the above declaration should be changed for the other arrays, MAX_WORD_LENGTH is misleading 
@@ -74,6 +75,7 @@ int main() {
     char *piped_cmd[MAX_WORD_LENGTH] = {0};
     // int handler_list[MAX_JOBS*2];
     int n = 0; //tracking the tokens
+    // char **args_child = calloc(n+2, sizeof(char *)); //creating new array copy of args to have for the child processes and not interfere with the parent which may start another command while the child is still running
     bool redirection = false; //for if > is encountered 
     bool piping = false;
     bool background = false;
@@ -175,6 +177,7 @@ int main() {
         // printf("%d\n", errno);
         cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping, bg_args, jobs_list);        
     }
+    cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping, bg_args, jobs_list);
     return 0;
 }
 
@@ -487,14 +490,23 @@ int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, i
     free(line);
     line = NULL; //optional, suggested by chatgpt
     
+    fprintf(stderr, "n = %d\n", *n);
     for (int i = 0; args[i] != NULL; i++) {
+    // for (int i = 0; i <= *n; i++) {
+        fprintf(stderr, "freeing args[%d] = %p\n", i, (void *)args[i]);
         free(args[i]);        
         args[i] = NULL; //optional, suggested by chatgpt
         free(bg_args[i]);
         bg_args[i] = NULL;
     }
-    memset(args, 0, sizeof(args));
-    memset(bg_args, 0, sizeof(bg_args));
+    // fprintf(stderr, "Freeing args at %p\n", (void *)args);
+    free(args);
+    args = NULL;
+    free(bg_args);
+    bg_args = NULL;
+    // memset(args, 0, sizeof(args));
+    // memset(bg_args, 0, sizeof(bg_args));
+    // memset(args_child, 0, sizeof(args_child));
 
     // free(bg_args);
     // bg_args = NULL;
@@ -509,8 +521,7 @@ int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, i
         piped_cmd[i] = NULL;
     }
     memset(piped_cmd, 0, sizeof(piped_cmd));
-
-  
+    
     
     *n = 0;
     // memset(redirection_file, 0, sizeof(redirection_file)); 

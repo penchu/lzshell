@@ -143,31 +143,30 @@ int main() {
                 bg_args = run_external(n, builtin_handler, args, redirection_type, redirection, piping, &background, piped_cmd, redirection_file);
         }
 
-        // for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
-        //     printf("%d, %d, %d\n", jobs_list[i].job_num, jobs_list[i].pid, jobs_list[i].status);
-        //     for (int j = 0; j <= all_proc_count; j++) {
-        //         if (jobs_list[i].pid == handler_list[j]) {
-        //             printf("[%d] Done.\n", jobs_list[i].job_num);
-        //             jobs_list[i].status = Done;
-        //             test = 0;
-        //             proc_count--;
-        //             break;
-        //         }
-        //     }
-        // }
-
         for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
-            printf("%d, %d, %d\n", jobs_list[i].job_num, jobs_list[i].pid, jobs_list[i].status);            
-            if (jobs_list[i].pid == test) {
-                printf("[%d] Done.\n", jobs_list[i].job_num);
-                jobs_list[i].status = Done;
-                test = 0;
-                proc_count--;
-                break;
+            printf("%d, %d, %d\n", jobs_list[i].job_num, jobs_list[i].pid, jobs_list[i].status);
+            for (int j = 0; j <= all_proc_count; j++) {
+                if (jobs_list[i].pid == handler_list[j] && jobs_list[i].status != Done) {
+                    printf("[%d] Done.\n", jobs_list[i].job_num);
+                    jobs_list[i].status = Done;
+                    test = 0;
+                    proc_count--;
+                    all_proc_count--;
+                    break;
+                }
             }
-            
         }
 
+        // for (int i = 0; jobs_list[i].job_num != '\0'; i++) {
+        //     printf("%d, %d, %d\n", jobs_list[i].job_num, jobs_list[i].pid, jobs_list[i].status);            
+        //     if (jobs_list[i].pid == test) {
+        //         printf("[%d] Done.\n", jobs_list[i].job_num);
+        //         jobs_list[i].status = Done;
+        //         test = 0;
+        //         proc_count--;
+        //         break;
+        //     }            
+        // }
 
         // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
         //     printf("args[%d] = %s\n", i, args[i]);
@@ -543,7 +542,7 @@ int cmd_exit() {
 
 void sig_handler(int signum, siginfo_t *info, void *context) {
     int status;
-    test = info->si_pid; //need to differentiate between what id is saved here, as if it is a bg proc a new external is messing with this and prevent reaping
-    // handler_list[all_proc_count] = info->si_pid;
+    // test = info->si_pid; //need to differentiate between what id is saved here, as if it is a bg proc a new external is messing with this and prevent reaping
+    handler_list[all_proc_count] = info->si_pid;
     while (waitpid(-1, &status, WNOHANG) > 0); 
 }

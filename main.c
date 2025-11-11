@@ -170,14 +170,14 @@ int main() {
         //     }            
         // }
 
-        // for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
-        //     printf("args[%d] = %s\n", i, args[i]);
-        //     // printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
-        // }
+        for (int i = 0; args[i] != NULL; i++) { //printf for checking the arrays
+            printf("args[%d] = %s\n", i, args[i]);
+            // printf("piped_cmd[%d] = %s\n", i, piped_cmd[i]);
+        }
         // printf("%d\n", errno);
         cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping, bg_args, jobs_list);        
     }
-    cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping, bg_args, jobs_list);
+    // cleanup(args, line, redirection_file, piped_cmd, &n, &redirection_type, &piping, bg_args, jobs_list);
     return 0;
 }
 
@@ -490,10 +490,10 @@ int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, i
     free(line);
     line = NULL; //optional, suggested by chatgpt
     
-    fprintf(stderr, "n = %d\n", *n);
+    // fprintf(stderr, "n = %d\n", *n);
     for (int i = 0; args[i] != NULL; i++) {
     // for (int i = 0; i <= *n; i++) {
-        fprintf(stderr, "freeing args[%d] = %p\n", i, (void *)args[i]);
+        // fprintf(stderr, "freeing args[%d] = %p\n", i, (void *)args[i]);
         free(args[i]);        
         args[i] = NULL; //optional, suggested by chatgpt
         free(bg_args[i]);
@@ -504,9 +504,8 @@ int cleanup(char **args, char *line, char *redirection_file, char **piped_cmd, i
     args = NULL;
     free(bg_args);
     bg_args = NULL;
-    // memset(args, 0, sizeof(args));
-    // memset(bg_args, 0, sizeof(bg_args));
-    // memset(args_child, 0, sizeof(args_child));
+    memset(args, 0, sizeof(args));
+    memset(bg_args, 0, sizeof(bg_args));
 
     // free(bg_args);
     // bg_args = NULL;
